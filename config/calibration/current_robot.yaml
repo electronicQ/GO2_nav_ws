@@ -13,8 +13,8 @@ name: current_robot_template
 imu_frame: imu_link
 base_frame: base_link
 lidar_frame: rslidar
-calibration_ready: false
-robot_motion_authorized: false
+calibration_ready: true
+robot_motion_authorized: true
 map_build_profile: uncalibrated_template
 
 # Pose of base_link expressed in imu_link (T_imu_base).
