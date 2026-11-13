@@ -1,0 +1,29 @@
+# Template for the current GO2 sensor installation.
+#
+# Replace every placeholder with measured values and set both readiness flags
+# to true only after validating the full map -> base_link TF chain. The launch
+# entry refuses control_robot:=true while robot_motion_authorized is false.
+#
+# Coordinate convention:
+#   imu_to_base.translation is the position of base_link in imu_link.
+#   imu_to_lidar.translation is the position of rslidar in imu_link.
+#   rotation_xyzw is the orientation of the child frame in the parent frame.
+schema_version: 1
+name: current_robot_template
+imu_frame: imu_link
+base_frame: base_link
+lidar_frame: rslidar
+calibration_ready: false
+robot_motion_authorized: false
+map_build_profile: uncalibrated_template
+
+# Pose of base_link expressed in imu_link (T_imu_base).
+imu_to_base:
+  translation: [-0.1, 0.0, -0.65]
+  rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+# Pose of rslidar expressed in imu_link (T_imu_lidar).
+# Voxel-SLAM uses: p_imu = R * p_lidar + t.
+imu_to_lidar:
+  translation: [0.0, 0.0, -0.06]
+  rotation_xyzw: [0.0, 0.0, 0.0, 1.0]

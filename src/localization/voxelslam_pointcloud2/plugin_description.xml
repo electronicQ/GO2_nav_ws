@@ -1,0 +1,7 @@
+<library path="voxelslam_pointcloud2">
+  <class name="voxelslam_pointcloud2/VoxelSLAMPointCloud2"
+         type="voxelslam_pointcloud2::PointCloud2Display"
+         base_class_type="rviz_common::Display">
+    <description>PointCloud2 display with invalid-point filtering.</description>
+  </class>
+</library>

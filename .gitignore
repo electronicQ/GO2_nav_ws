@@ -1,0 +1,70 @@
+# colcon / ROS 2 build products
+/build/
+/install/
+/log/
+
+# Python caches and test output
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ROS runtime logs and rosbags
+.ros/
+ros_logs/
+*.bag
+*.db3
+*.db3-shm
+*.db3-wal
+*.mcap
+
+# Local SLAM maps, processed exports and temporary map packages
+/maps/
+/maps/*.incomplete_*/
+/maps/*.tmp/
+*.pcd.tmp
+*.pgm.tmp
+*.yaml.tmp
+
+# Packaging output
+/dist/
+/release/
+/stage/
+/private/
+/.packaging/
+/obj-*/
+*.deb
+# Checked-in proprietary runtime artifacts are installed by
+# scripts/install_dependencies.sh.
+!/third_party/debs/
+!/third_party/debs/**/*.deb
+/debian/.debhelper/
+/debian/files
+/debian/*.substvars
+/debian/*.debhelper
+
+# Editors and local configuration
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.clangd/
+.cache/clangd/
+compile_commands.json
+
+# Patch and crash artifacts
+*.orig
+*.rej
+*.core
+core
+core.*
+
+# Local logs
+*.log

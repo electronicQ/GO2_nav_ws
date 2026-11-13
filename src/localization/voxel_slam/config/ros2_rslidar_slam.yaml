@@ -1,0 +1,99 @@
+# zoulang1111: RoboSense 16-line PointCloud2 mapping, no Velodyne conversion.
+# Native fields: x/y/z/intensity=float32, ring=uint16, timestamp=float64 seconds.
+# IMPORTANT: extrinsics below are UNCALIBRATED identity/zero placeholders.
+# Convention: p_imu = extrinsic_rota * p_lidar + extrinsic_tran (metres).
+# Recorded IMU is only ~10 Hz; initial acceleration norm is ~0.0048.
+# Confirm IMU units/scaling and calibration before judging mapping quality.
+# No automatic IMU scaling or timestamp shifts are applied.
+# blind is compared against squared range in the current RoboSense handler:
+# 0.25 corresponds to a 0.5 m exclusion radius.
+/**:
+  ros__parameters:
+    finish: false
+    finish_no_ba: false
+    General:
+      mode: mapping
+      # 当前定位使用的 v4 扫描地图包：每帧点云、最终位姿、manifest.yaml 和 scans.yaml。
+      # 启动前该目标目录必须不存在；保存完成后由临时目录重命名生成。
+      # 注意：map_export_path 不能与 save_path + bagname 指向同一个目录！
+      map_export_path: /tmp/voxel_slam_export/zoulang1111_sc_map
+      map_scan_leaf_size_m: 0.1
+      lid_topic: /rslidar_points
+      imu_topic: /imu/data_raw
+      # 旧格式保存目录由 save_path + bagname 拼接；开启 is_save_map 后保存旧格式点云、位姿和回环约束。
+      # 当前旧逻辑即使 is_save_map: 0 仍会创建该目录，因此它不能与 map_export_path 相同。
+      bagname: zoulang1111_map
+      previous_map: ''
+      save_path: /tmp/voxel_slam_legacy/ # 旧格式临时目录，避免写入源码或地图仓库。
+      lidar_type: 4
+      blind: 0.25
+      point_filter_num: 1
+      extrinsic_tran:
+      - 0.0
+      - 0.0
+      - 0.0
+      extrinsic_rota:
+      - 1.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 1.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 1.0
+      is_save_map: 0
+    Odometry:
+      imu_rate_output: true
+      imu_odom_topic: /LIO/odom_imu
+      odom_frame: camera_init
+      imu_child_frame: aft_mapped
+      publish_before_localized: false
+      max_prediction_sec: 0.5
+      cov_gyr: 0.01
+      cov_acc: 1.0
+      rdw_gyr: 0.0001
+      rdw_acc: 0.0001
+      down_size: 0.15
+      dept_err: 0.01
+      beam_err: 0.01
+      voxel_size: 1.0
+      min_eigen_value: 0.01
+      degrade_bound: 100
+      point_notime: 0
+    LocalBA:
+      enabled: true
+      win_size: 10
+      max_layer: 2
+      cov_gyr: 0.01
+      cov_acc: 1.0
+      rdw_gyr: 0.0001
+      rdw_acc: 0.0001
+      min_ba_point: 1
+      plane_eigen_value_thre:
+      - 4.0
+      - 4.0
+      - 4.0
+      - 4.0
+      imu_coef: 0.0001
+      thread_num: 5
+    Loop:
+      skip_near_num: 20
+      jud_default: 0.45
+      icp_eigval: 15.0
+      ratio_drift: 0.01
+      curr_halt: 10
+      prev_halt: 10
+      acsize: 2
+      mgsize: 2
+      isHighFly: 0
+    GBA:
+      voxel_size: 2.0
+      min_eigen_value: 0.01
+      eigen_value_array:
+      - 9.0
+      - 9.0
+      - 9.0
+      - 9.0
+      total_max_iter: 3
+    use_sim_time: true

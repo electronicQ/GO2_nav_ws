@@ -1,0 +1,6 @@
+build:
+  base-paths: [src]
+  symlink-install: true
+  executor: sequential
+  cmake-args:
+    - -DCMAKE_BUILD_TYPE=Release

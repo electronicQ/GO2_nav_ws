@@ -1,0 +1,55 @@
+/**:
+  ros__parameters:
+    Localization:
+      direct_match:
+        # Optional comparison path; default localization continuously runs SC + Quatro + Nano-GICP.
+        registration_backend: point_to_plane # Options: point_to_plane, nano_gicp
+        gicp_leaf_size_m: 0.2
+        gicp_threads: 4
+        gicp_covariance_neighbors: 20
+        enabled: false
+        period_sec: 1.0
+        translation_m: 0.5
+        rotation_deg: 10.0
+        retry_sec: 5.0
+        # A short window provides more plane support than one sparse scan.
+        # DIRECT and SC windows are independent.
+        query_scans: 3
+        query_leaf_size_m: 0.2
+        query_max_range_m: 80.0
+        min_query_points: 100
+        target_padding_m: 5.0
+        cache_padding_m: 5.0
+        cache_refresh_distance_m: 3.0
+        target_leaf_size_m: 0.2
+        max_target_voxels: 500000
+        recovery_after_failures: 5
+        # Sensor seconds since the last accepted correction, not a true drift estimate.
+        recovery_after_sec: 15.0
+        icp_max_correspondence_m: 1.0
+        icp_max_iterations: 30
+      dual_tf:
+        enabled: true
+        map_frame: map
+        query_period_sec: 1.0
+        max_result_age_sec: 5.0
+        stale_after_sec: 10.0
+        global_valid_timeout_sec: 30.0
+        large_translation_m: 0.5
+        large_rotation_deg: 3.0
+        confirmation_translation_m: 0.25
+        confirmation_rotation_deg: 2.0
+        confirmation_timeout_sec: 5.0
+        # DIRECT proposals require subsequent, non-overlapping scans at a frozen transform.
+        audit_min_delay_sec: 0.5
+        audit_scans: 10
+        audit_min_matches: 20
+        audit_min_overlap: 0.4
+        audit_max_plane_distance_m: 0.15
+        audit_max_point_distance_m: 1.0
+        audit_max_rmse_m: 0.08
+        audit_max_p95_m: 0.12
+        audit_min_normal_eigenvalue: 0.005
+        audit_min_spatial_eigenvalue_m2: 0.1
+        audit_prior_comparison_m: 0.3
+        audit_improvement_margin_m: 0.015

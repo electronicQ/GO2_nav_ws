@@ -1,0 +1,83 @@
+# RoboSense 16线 / zoulang1111 定位传感器配置。
+# 由该包建图配置复制 LIO、IMU 噪声和外参，使用原生 PointCloud2，无需转 Velodyne。
+# 点字段：x/y/z/intensity=float32, ring=uint16, timestamp=float64（秒）。
+# /rslidar_points 约10 Hz；zoulang1111 的 /imu/data_raw 约100 Hz。
+# 外参沿用建图的零平移/单位旋转；如实际有标定值，应与建图保持一致。
+# p_imu = extrinsic_rota * p_lidar + extrinsic_tran，平移单位 m。
+# blind 在当前速腾处理器中与距离平方比较：0.25 对应0.5 m盲区。
+# 地图路径和显示PCD由launch参数设置；匹配使用v4扫描包，显示PCD不参与匹配。
+# SC参数见 ros2_scancontext_rslidar_relocalization.yaml，双TF公共设置见 ros2_localization_common.yaml。
+/**:
+  ros__parameters:
+    finish: false
+    finish_no_ba: false
+    General:
+      mode: localization
+      map_export_path: ''
+      lid_topic: /rslidar_points
+      imu_topic: /imu/data_raw
+      bagname: rslidar_zoulang1111_localization
+      previous_map: ''
+      save_path: /tmp/voxel_slam/save_datas/
+      lidar_type: 4
+      blind: 0.25
+      point_filter_num: 1
+      extrinsic_tran: [0.0, 0.0, 0.0]
+      extrinsic_rota: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+      is_save_map: 0
+    Odometry:
+      imu_rate_output: true
+      imu_odom_topic: /LIO/odom_imu
+      odom_frame: odom
+      imu_child_frame: imu_link # LIO估计的IMU坐标系；车体base_link需使用真实安装外参关联。
+      # Publish the local odom->imu_link TF before global alignment so Nav2 can
+      # initialize its local costmap. Robot motion remains gated by
+      # /localization/valid and IN_MAP_TRACKING in go2_twist_bridge.
+      publish_before_localized: true
+      max_prediction_sec: 0.5
+      cov_gyr: 0.01
+      cov_acc: 1.0
+      rdw_gyr: 0.0001
+      rdw_acc: 0.0001
+      down_size: 0.15
+      dept_err: 0.01
+      beam_err: 0.01
+      voxel_size: 1.0
+      min_eigen_value: 0.01
+      degrade_bound: 100
+      point_notime: 0
+    LocalBA:
+      enabled: true
+      win_size: 10
+      max_layer: 2
+      cov_gyr: 0.01
+      cov_acc: 1.0
+      rdw_gyr: 0.0001
+      rdw_acc: 0.0001
+      min_ba_point: 1
+      plane_eigen_value_thre: [4.0, 4.0, 4.0, 4.0]
+      imu_coef: 0.0001
+      thread_num: 5
+    Loop:
+      skip_near_num: 20
+      jud_default: 0.45
+      icp_eigval: 15.0
+      ratio_drift: 0.01
+      curr_halt: 10
+      prev_halt: 10
+      acsize: 2
+      mgsize: 2
+      isHighFly: 0
+    GBA:
+      voxel_size: 2.0
+      min_eigen_value: 0.01
+      eigen_value_array: [9.0, 9.0, 9.0, 9.0]
+      total_max_iter: 3
+    use_sim_time: true
+    Localization:
+      map_path: ''
+      visualization:
+        publish_map_cloud: true
+        map_cloud_path: ''
+      alignment_max_translation_m: 1000.0
+      alignment_max_rotation_deg: 180.0

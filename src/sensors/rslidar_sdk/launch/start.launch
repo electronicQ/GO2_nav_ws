@@ -1,0 +1,11 @@
+<launch>
+  <node pkg="rslidar_sdk" name="rslidar_sdk_node" type="rslidar_sdk_node" output="screen">
+    <param name="config_path" value=""/>
+  </node>
+  
+  <!--<node pkg="tf2_ros" type="static_transform_publisher" name="lidar2base_publisher" args="0.33 0.0 0.40 0.0 0.0 0.0 base_link rslidar" />-->
+  <!--<node name="rviz" pkg="rviz" type="rviz"  args="-d $(find rslidar_pointcloud)/rviz_cfg/rslidar.rviz" />-->
+  
+  <!-- rviz 
+  <node pkg="rviz" name="rviz" type="rviz" args="-d $(find rslidar_sdk)/rviz/rviz.rviz" />-->
+</launch>

@@ -1,0 +1,24 @@
+# Calibration profile used to build the copied zoulang1111 map.
+#
+# The map package manifest stores scans in the IMU frame. Keep this profile
+# consistent with the extrinsics used to build the copied map. Changing these
+# values without rebuilding the map makes the map and sensor frames disagree.
+schema_version: 1
+name: zoulang1111_legacy
+imu_frame: imu_link
+base_frame: base_link
+lidar_frame: rslidar
+calibration_ready: false
+robot_motion_authorized: false
+map_build_profile: zoulang1111_legacy
+
+# Pose of base_link expressed in imu_link (T_imu_base).
+imu_to_base:
+  translation: [-0.1, 0.0, -0.65]
+  rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+# Pose of rslidar expressed in imu_link (T_imu_lidar).
+# Voxel-SLAM uses: p_imu = R * p_lidar + t.
+imu_to_lidar:
+  translation: [0.0, 0.0, -0.06]
+  rotation_xyzw: [0.0, 0.0, 0.0, 1.0]

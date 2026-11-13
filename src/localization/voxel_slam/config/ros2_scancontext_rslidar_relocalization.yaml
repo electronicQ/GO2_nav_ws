@@ -1,0 +1,35 @@
+/**:
+  ros__parameters:
+    Localization:
+      # 速腾定位独立配置，由 vxlm_localization_rslidar.launch.py 最后加载。
+      # 首次定位及后续连续修正均采用 SC -> Quatro -> Nano-GICP。
+      # 匹配使用原始v4扫描，不使用processed中的障碍PCD或二维栅格。
+      # 沿用已验证SC基线参数；机械式雷达仍保持5帧融合，后续可单独评估。
+      map_cache_mb: 512 # Resident cloud+plane LRU budget, not total process RSS.
+      history:
+        window_scans: 5 # 历史描述子与配准目标使用的融合扫描数。
+        translation_m: 0.5
+        rotation_deg: 10.0
+        leaf_size_m: 0.0 # Generate SC directly from fused saved scans.
+      scancontext:
+        query_scans: 5 # 实时描述子与配准源使用的融合扫描数。
+        query_stride_scans: 1
+        query_leaf_size_m: 0.0 # Fused deskewed scans, not the LIO's filtered cloud.
+        registration_leaf_size_m: 0.3
+        candidates: 3
+        distance_threshold: 0.2
+        max_radius_m: 80.0
+        lidar_height_m: 2.0 # SC高度编码偏移，不是LiDAR到IMU的外参平移。
+        normal_radius_m: 0.6
+        fpfh_radius_m: 0.9
+        noise_bound_m: 0.3
+        max_correspondences: 350
+        threads: 4
+        gicp_max_correspondence_m: 35.0
+        gicp_fitness_threshold: 1.0
+        # Only after map->odom is established; initial localization is global.
+        candidate_max_distance_m: 35.0 # 仅已对齐后生效；首次定位不使用位置距离限制。
+        # 首次定位豁免；已对齐后，比较同一查询锚点修正前后的位姿，超限直接拒绝。
+        correction_jump_check_enabled: true # false：跳过下方两个修正跳变门槛；其他检查保持有效。
+        max_correction_translation_m: 0.5 # 三维位置变化上限，单位 m。
+        max_correction_rotation_deg: 10.0 # 旋转变化上限，单位度。

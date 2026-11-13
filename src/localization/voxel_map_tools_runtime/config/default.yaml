@@ -1,0 +1,66 @@
+# zoulang1111 已验证配置：开启动态剔除，采用跨窗口聚合后的全局地面确认。
+# 处理参数与 2026-11-12 enabled.yaml 测试一致；输出改为地图包下 processed/。
+# 路径相对于本配置文件；input_map 应指向包含 manifest.yaml/scans.yaml 的 v4 地图包。
+input_map: '' # process_map.launch.py 默认使用 <GO2_NAV_WORKSPACE>/maps/zoulang1111_sc_map
+output_dir: '' # 留空：<input_map>/processed；已有结果须显式 --overwrite。
+outputs:
+  save_full: true # 保存动态清理后的完整点云 map_full.pcd。
+  save_nonground: true # 保存去地面点云；未知地面区域的点仍保留。
+  save_obstacles: true # 保存满足局部地面高度范围的障碍点云。
+  save_grid: true # 保存 Nav2 三态栅格 map.pgm 和 map.yaml。
+  full_leaf_m: 0.20 # 完整 PCD 的体素边长，单位 m。
+  nonground_leaf_m: 0.20 # 去地面 PCD 的体素边长，单位 m。
+  obstacles_leaf_m: 0.10 # 障碍 PCD 的体素边长；不影响栅格生成。
+window:
+  scans: 20 # 每个局部地面拟合窗口的扫描数，不是动态检测时域。
+  stride_scans: 10 # 每帧只输出一次，重叠部分作为拟合上下文。
+preprocess:
+  leaf_m: 0.10 # 地面拟合/分类预处理的体素边长。
+  radius_filter_enabled: false # 可选孤立点滤波，不能替代动态物体剔除。
+  radius_m: 0.30 # 半径滤波搜索半径，单位 m。
+  min_neighbors: 3 # 开启半径滤波后要求的最少邻居数。
+# 地图 Z 轴须向上；第一版适用于地面平台/手持、单层含缓坡的地图。
+# 地面先跨窗口聚合候选，再使用全程轨迹及邻区高度/法向连续性统一审核。
+# 下列门限保持约束；不通过无条件填灰区来扩大空闲区域。
+ground:
+  tile_size_m: 2.0 # 局部地面 XY 分区边长，单位 m。
+  halo_m: 0.5 # 拟合使用的分区边界上下文余量，单位 m。
+  max_slope_deg: 25.0 # 候选地面相对水平面的最大坡度。
+  fit_distance_m: 0.08 # RANSAC 平面内点的距离阈值。
+  min_support: 30 # 候选平面最少内点数。
+  min_inlier_ratio: 0.30 # 内点数占局部拟合点云的最低比例。
+  ransac_iterations: 300 # 每次平面拟合的最大迭代次数。
+  seed_radius_m: 2.0 # 全程轨迹附近选择地面种子的水平半径。
+  sensor_height_min_m: 0.20 # 保存的 IMU 位置相对种子地面的最低高度。
+  sensor_height_max_m: 2.50 # 保存的 IMU 位置相对种子地面的最高高度。
+  continuity_height_m: 0.15 # 相邻地面在公共边界的最大高度差。
+  continuity_angle_deg: 10.0 # 相邻地面法向的最大夹角。
+  remove_height_m: 0.10 # 已知地面处保留 h>此值；地面以下也移除，未知处保留。
+  free_height_m: 0.10 # 仅 |h|<=此值的观测支持空闲栅格。
+obstacles:
+  min_height_m: 0.30 # 沿地图 Z 方向到局部地面的有符号高度，包含端点。
+  max_height_m: 1.50 # 障碍物相对局部地面的最高高度，包含端点。
+grid:
+  resolution_m: 0.10 # 栅格分辨率，单位 m/格；未知不自动填充。
+  margin_m: 1.0 # 地图有效观测边界外的留白余量。
+  max_cells: 100000000 # 防止异常坐标导致超大图片；不裁掉数据以满足限制。
+
+# 离线动态点剔除：使用整个序列（含后续帧），不受 window.scans 限制。
+# 静止十秒后才移动的物体，仍可由更晚的“射线穿过原位置”证据删除。
+# 未被可靠看穿/被遮挡的位置保留；不是按出现次数或类别删除行人。
+dynamic_removal:
+  enabled: true # true：清理点用于全部 PCD 与栅格；由原始观测拟合可靠地面作恢复保护。
+  protect_ground: true # 恢复可靠地面容差带内的点，避免掠地射线误删地面。
+  voxel_m: 0.15 # 动态判据的三维体素边长，与输出采样独立。
+  ray_tolerance_m: 0.06 # 射线与已观测体素中心的最大横向距离，越大越激进。
+  endpoint_margin_m: 0.30 # 返回点前的保护距离；不把表面附近或其后方当作空闲。
+  min_range_m: 0.50 # 射线提供空闲证据的最小距离。
+  max_range_m: 30.0 # 射线提供空闲证据的最大距离。
+  time_bin_sec: 1.0 # 同一时间桶内无论多少射线都只投一票。
+  min_free_ratio: 0.20 # 空闲时间桶/(空闲+占据时间桶)，不是点数比例。
+  min_free_bins: 3 # 至少三个不同时间桶的明确空闲证据。
+  min_free_span_sec: 2.0 # 空闲证据时间跨度至少两秒。
+  occupied_time_margin_sec: 1.0 # 与占据观测同桶或相邻一秒的空闲证据作废。
+  ray_stride_scans: 3 # 所有帧收集占据证据，每三帧检查射线；不是只看三帧。
+  # 默认由 launch 的 calibration_file 覆盖；传 calibration_file:='' 可使用本文件值。
+  sensor_origin_imu_m: [0.0, 0.0, 0.0] # LiDAR 原点在保存的 IMU 坐标系下的位置，单位 m。

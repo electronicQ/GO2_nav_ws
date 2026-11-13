@@ -1,0 +1,14 @@
+{
+  "names": {
+    "voxel_slam": {
+      "cmake-args": [
+        "-DVOXEL_SLAM_ENABLE_SC_QN=ON"
+      ]
+    },
+    "rslidar_sdk": {
+      "cmake-args": [
+        "-DDISABLE_PCAP_PARSE=ON"
+      ]
+    }
+  }
+}
