@@ -7,7 +7,7 @@ common:
   send_point_cloud_ros: true            # true: Send point cloud through ROS or ROS2
 lidar:
   - driver:
-      lidar_type: RS16             #  LiDAR type - RS16, RS32, RSBP, RSAIRY, RSHELIOS, RSHELIOS_16P, RS128, RS80, RS48, RSP128, RSP80, RSP48, 
+      lidar_type: RSHELIOS_16P     #  LiDAR type - RS16, RS32, RSBP, RSAIRY, RSHELIOS, RSHELIOS_16P, RS128, RS80, RS48, RSP128, RSP80, RSP48,
                                    #               RSM1, RSM1_JUMBO, RSM2, RSM3, RSE1, RSMX.
                                    
       msop_port: 6699              #  Msop port of lidar
@@ -18,7 +18,7 @@ lidar:
       tail_layer_bytes: 0          #  Bytes of tail layer. thers is no tail layer if it is 0
 
 
-      min_distance: 0.2          #  Minimum distance of point cloud
+      min_distance: 1            #  Minimum distance of point cloud
       max_distance: 200            #  Maximum distance of point cloud
       use_lidar_clock: false        #  Keep LiDAR and external IMU on the host clock.
                                    #  Enable only after hardware time sync is validated.
