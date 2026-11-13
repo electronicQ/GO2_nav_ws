@@ -126,14 +126,45 @@ cd "$HOME/GO2_nav_ws"
 source scripts/setup_env.sh
 ```
 
-也可以手动构建：
+部署机资源有限，或完整构建因内存压力卡住时，建议使用以下低资源构建方式。
+它不会编译测试目标，并限制 CMake 的并行编译进程数：
 
 ```bash
 cd "$HOME/GO2_nav_ws"
+
+set +u
+export GO2_SKIP_WORKSPACE_INSTALL=1
 source scripts/setup_env.sh
-colcon build --event-handlers console_direct+
+unset GO2_SKIP_WORKSPACE_INSTALL
+set -u
+
+export CMAKE_BUILD_PARALLEL_LEVEL=2
+
+colcon build \
+  --executor sequential \
+  --event-handlers console_direct+ \
+  --cmake-args \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF
+
 source scripts/setup_env.sh
 ```
+
+使用该方式前应确认第三方前缀和闭源地图处理包已经安装：
+
+```bash
+test -d "$HOME/GO2_nav_ws/third_party/install/gtsam"
+test -d "$HOME/GO2_nav_ws/third_party/install/teaserpp"
+test -d "$HOME/GO2_nav_ws/third_party/ros-humble"
+ros2 pkg prefix voxel_map_tools
+```
+
+最后一条命令应返回 `/opt/ros/humble`。如果内存仍然不足，可将
+`CMAKE_BUILD_PARALLEL_LEVEL` 降到 `1`。中止后的构建可以重新执行，并利用已有
+CMake 缓存继续编译。
+
+该低资源命令适用于部署机。开发机需要编译和执行回归测试时，应继续使用
+`./scripts/build.sh`，或者显式设置 `BUILD_TESTING=ON`。
 
 构建日志必须包含：
 
