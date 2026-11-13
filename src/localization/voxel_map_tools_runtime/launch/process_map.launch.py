@@ -67,7 +67,7 @@ def generate_launch_description():
         workspace / 'src' / 'localization' / 'voxel_map_tools_runtime'
         / 'config' / 'default.yaml')
     default_calibration = str(
-        workspace / 'config' / 'calibration' / 'zoulang1111_legacy.yaml')
+        workspace / 'config' / 'calibration' / 'current_robot.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument(

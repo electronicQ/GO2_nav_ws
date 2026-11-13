@@ -22,8 +22,8 @@
 `calibration_file`，并把 `imu_to_lidar.translation` 写入
 `dynamic_removal.sensor_origin_imu_m`。
 
-地图包与其建图外参绑定。复制的 `zoulang1111_sc_map` 必须继续使用
-`zoulang1111_legacy.yaml` 中与建图时一致的外参；重新标定后必须重新建图。
+地图包与其建图外参绑定。建图、地图处理和定位统一使用
+`current_robot.yaml`；重新标定后必须重新建图。
 
 ## 定位门控
 

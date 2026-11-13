@@ -45,15 +45,15 @@ def test_mapping_legacy_directory_is_workspace_local(tmp_path):
     assert override.parent == tmp_path / 'legacy_override'
 
 
-def test_legacy_calibration_is_consistent():
+def test_current_robot_calibration_is_consistent():
     calibration = load_calibration(
-        workspace_root() / 'config/calibration/zoulang1111_legacy.yaml')
+        workspace_root() / 'config/calibration/current_robot.yaml')
     assert calibration['imu_frame'] == 'imu_link'
     assert calibration['base_frame'] == 'base_link'
     assert calibration['lidar_frame'] == 'rslidar'
     assert len(calibration['imu_to_lidar']['translation']) == 3
     assert len(calibration['imu_to_lidar']['rotation_xyzw']) == 4
-    assert calibration['robot_motion_authorized'] is False
+    assert calibration['robot_motion_authorized'] is True
 
 
 def test_copied_v4_map_resolves():

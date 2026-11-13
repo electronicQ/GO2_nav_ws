@@ -121,7 +121,7 @@ point removal:
 
 ```bash
 ros2 launch voxel_map_tools process_map.launch.py \
-  calibration_file:=/absolute/path/to/zoulang1111_legacy.yaml
+  calibration_file:=/absolute/path/to/current_robot.yaml
 ```
 
 Use `ros2 launch voxel_map_tools process_map.launch.py --show-args` for the

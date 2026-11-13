@@ -332,14 +332,14 @@ ros2 param set /voxelslam finish_no_ba true
 
 ```bash
 ros2 launch voxel_map_tools_runtime process_map.launch.py \
-  input_map:=$GO2_NAV_WORKSPACE/maps/zoulang1111_sc_map \
-  calibration_file:=$GO2_NAV_WORKSPACE/config/calibration/zoulang1111_legacy.yaml \
+  input_map:=$GO2_NAV_WORKSPACE/maps/my_scene_sc_map \
   overwrite:=true
 ```
 
 已有 `processed/` 时必须显式 `overwrite:=true`，工具只替换它管理的输出文件。
 `calibration_file` 会把 `imu_to_lidar.translation` 同步到动态点剔除所需的
-`sensor_origin_imu_m`，新地图应传入与建图时相同的标定文件。
+`sensor_origin_imu_m`，默认读取
+`$GO2_NAV_WORKSPACE/config/calibration/current_robot.yaml`。
 
 ## 定位与导航
 
@@ -423,7 +423,6 @@ launch 修改通常会在节点或 launch 重启后生效；C++ 源码修改后�
 | 外置 IMU | [mapping.launch.py](src/integration/go2_nav_bringup/launch/mapping.launch.py) 和 [localization_nav.launch.py](src/integration/go2_nav_bringup/launch/localization_nav.launch.py) | `sensor_serial_port`、`sensor_serial_baud` |
 | 外置 RS16 雷达 | [config.yaml](src/sensors/rslidar_sdk/config/config.yaml) | 雷达型号、MSOP/DIFOP 端口、雷达帧、点云话题、时钟来源、距离范围 |
 | IMU、雷达、`base_link` 外参 | [current_robot.yaml](config/calibration/current_robot.yaml) | `imu_to_base`、`imu_to_lidar`、标定和实机控制授权 |
-| zoulang1111 旧地图外参 | [zoulang1111_legacy.yaml](config/calibration/zoulang1111_legacy.yaml) | 与已复制旧地图建图时一致的 IMU、雷达和车体变换 |
 | 实时或 bag 建图入口 | [mapping.launch.py](src/integration/go2_nav_bringup/launch/mapping.launch.py) | `sensor_source`、`bag_path`、`map_name`、`auto_finish`、`auto_finish_mode`、`finish_delay_sec`、`legacy_save_root`、`use_sim_time`、`rviz` |
 | Voxel-SLAM 建图算法 | [ros2_rslidar_slam.yaml](src/localization/voxel_slam/config/ros2_rslidar_slam.yaml) | 建图话题、IMU/雷达外参、LIO、局部 BA、回环、全局 BA、地图导出 |
 | 地图处理 | [default.yaml](src/localization/voxel_map_tools_runtime/config/default.yaml) | 输入地图、地面拟合、障碍高度、栅格分辨率、动态点剔除 |

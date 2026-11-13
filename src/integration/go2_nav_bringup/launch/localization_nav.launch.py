@@ -206,7 +206,7 @@ def generate_launch_description():
     lidar_share = Path(get_package_share_directory('rslidar_sdk'))
     default_map = ws / 'maps/zoulang1111_sc_map'
     default_calibration = (
-        ws / 'config/calibration/zoulang1111_legacy.yaml')
+        ws / 'config/calibration/current_robot.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument('sensor_source', default_value='live'),

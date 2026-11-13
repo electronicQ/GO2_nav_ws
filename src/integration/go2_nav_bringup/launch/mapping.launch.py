@@ -69,10 +69,7 @@ def _setup(context):
 
     calibration_arg = args['calibration_file'].strip()
     if calibration_arg in ('', 'auto'):
-        calibration_path = (
-            ws / 'config/calibration/zoulang1111_legacy.yaml'
-            if sensor_source == 'bag'
-            else ws / 'config/calibration/current_robot.yaml')
+        calibration_path = ws / 'config/calibration/current_robot.yaml'
     else:
         calibration_path = Path(calibration_arg)
     calibration = load_calibration(calibration_path)
