@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 from pathlib import Path
+import tempfile
 from typing import Any
 
 import yaml
@@ -40,6 +41,22 @@ def validate_auto_finish_mode(value: str) -> str:
             'auto_finish_mode must be finish or finish_no_ba '
             f'(got {value!r})')
     return mode
+
+
+def mapping_legacy_directory(
+    workspace: Path,
+    map_name: str,
+    legacy_save_root: str = '',
+) -> Path:
+    if legacy_save_root.strip():
+        root = Path(legacy_save_root).expanduser()
+        if not root.is_absolute():
+            root = workspace / root
+    else:
+        root = workspace / '.mapping_legacy'
+    root.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(
+        prefix=f'{map_name}_legacy_', dir=root))
 
 
 def auto_finish_command(finish_parameter: str) -> list[str]:

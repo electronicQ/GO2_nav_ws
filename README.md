@@ -223,6 +223,12 @@ ros2 launch go2_nav_bringup mapping.launch.py \
   calibration_file:=$GO2_NAV_WORKSPACE/config/calibration/current_robot.yaml
 ```
 
+Voxel-SLAM 的旧格式兼容目录由 launch 固定到工作空间下的
+`$GO2_NAV_WORKSPACE/.mapping_legacy/`，每次建图创建独立子目录，避免复用
+`/tmp/voxel_slam_legacy` 时因父目录或旧目录存在而创建失败。可通过
+`legacy_save_root:=/其他可写目录` 覆盖根目录。该目录只用于旧逻辑兼容，
+最终 v4 地图仍保存在 `$GO2_NAV_WORKSPACE/maps/<map_name>`。
+
 需要控制机器狗行走时使用遥控器。建图结束后，在另一个终端选择结束方式。
 
 执行最终全局 BA：
@@ -418,7 +424,7 @@ launch 修改通常会在节点或 launch 重启后生效；C++ 源码修改后�
 | 外置 RS16 雷达 | [config.yaml](src/sensors/rslidar_sdk/config/config.yaml) | 雷达型号、MSOP/DIFOP 端口、雷达帧、点云话题、时钟来源、距离范围 |
 | IMU、雷达、`base_link` 外参 | [current_robot.yaml](config/calibration/current_robot.yaml) | `imu_to_base`、`imu_to_lidar`、标定和实机控制授权 |
 | zoulang1111 旧地图外参 | [zoulang1111_legacy.yaml](config/calibration/zoulang1111_legacy.yaml) | 与已复制旧地图建图时一致的 IMU、雷达和车体变换 |
-| 实时或 bag 建图入口 | [mapping.launch.py](src/integration/go2_nav_bringup/launch/mapping.launch.py) | `sensor_source`、`bag_path`、`map_name`、`auto_finish`、`auto_finish_mode`、`finish_delay_sec`、`use_sim_time`、`rviz` |
+| 实时或 bag 建图入口 | [mapping.launch.py](src/integration/go2_nav_bringup/launch/mapping.launch.py) | `sensor_source`、`bag_path`、`map_name`、`auto_finish`、`auto_finish_mode`、`finish_delay_sec`、`legacy_save_root`、`use_sim_time`、`rviz` |
 | Voxel-SLAM 建图算法 | [ros2_rslidar_slam.yaml](src/localization/voxel_slam/config/ros2_rslidar_slam.yaml) | 建图话题、IMU/雷达外参、LIO、局部 BA、回环、全局 BA、地图导出 |
 | 地图处理 | [default.yaml](src/localization/voxel_map_tools_runtime/config/default.yaml) | 输入地图、地面拟合、障碍高度、栅格分辨率、动态点剔除 |
 | 地图处理入口 | [process_map.launch.py](src/localization/voxel_map_tools_runtime/launch/process_map.launch.py) | `input_map`、`output_dir`、`calibration_file`、`overwrite` |

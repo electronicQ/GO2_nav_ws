@@ -6,6 +6,7 @@ import yaml
 from go2_nav_bringup.launch_utils import (
     auto_finish_command,
     load_calibration,
+    mapping_legacy_directory,
     quaternion_to_matrix,
     resolve_map_yaml,
     validate_auto_finish_mode,
@@ -30,6 +31,18 @@ def test_auto_finish_mode_validation():
         'ros2', 'param', 'set', '/voxelslam', 'finish', 'true']
     assert auto_finish_command('finish_no_ba') == [
         'ros2', 'param', 'set', '/voxelslam', 'finish_no_ba', 'true']
+
+
+def test_mapping_legacy_directory_is_workspace_local(tmp_path):
+    directory = mapping_legacy_directory(tmp_path, 'test_scene')
+    assert directory.is_dir()
+    assert directory.parent == tmp_path / '.mapping_legacy'
+    assert directory.name.startswith('test_scene_legacy_')
+
+    override = mapping_legacy_directory(
+        tmp_path, 'override_scene', 'legacy_override')
+    assert override.is_dir()
+    assert override.parent == tmp_path / 'legacy_override'
 
 
 def test_legacy_calibration_is_consistent():

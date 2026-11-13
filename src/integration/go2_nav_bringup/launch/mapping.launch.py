@@ -1,5 +1,6 @@
 """Live or bag mapping with external IMU, RS16, and Voxel-SLAM."""
 
+import os
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -19,6 +20,7 @@ from go2_nav_bringup.launch_utils import (
     DEFAULT_BAG,
     delayed_finish_action,
     load_calibration,
+    mapping_legacy_directory,
     parse_auto_bool,
     sensor_nodes,
     validate_auto_finish_mode,
@@ -35,7 +37,7 @@ def _setup(context):
             'voxel_config', 'lidar_config', 'auto_finish',
             'auto_finish_mode', 'bag_start_paused', 'bag_rate',
             'sensor_serial_port', 'sensor_serial_baud', 'finish_delay_sec',
-            'rviz', 'use_sim_time',
+            'rviz', 'use_sim_time', 'legacy_save_root',
         )
     }
     sensor_source = args['sensor_source']
@@ -61,6 +63,9 @@ def _setup(context):
         raise RuntimeError(
             f'Map export target already exists: {map_export_path}. '
             'Choose a new map_name; Voxel-SLAM does not overwrite maps.')
+
+    legacy_directory = mapping_legacy_directory(
+        ws, map_name, args['legacy_save_root'])
 
     calibration_arg = args['calibration_file'].strip()
     if calibration_arg in ('', 'auto'):
@@ -90,6 +95,8 @@ def _setup(context):
             'General.mode': 'mapping',
             'General.map_export_path': str(map_export_path),
             'General.is_save_map': 0,
+            'General.save_path': f'{legacy_directory}{os.sep}',
+            'General.bagname': map_name,
             **voxel_extrinsic_parameters(calibration),
         },
     ]
@@ -170,5 +177,9 @@ def generate_launch_description():
         DeclareLaunchArgument('finish_delay_sec', default_value='5.0'),
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('use_sim_time', default_value='auto'),
+        DeclareLaunchArgument(
+            'legacy_save_root',
+            default_value=str(ws / '.mapping_legacy'),
+            description='Workspace scratch root for Voxel-SLAM legacy output.'),
         OpaqueFunction(function=_setup),
     ])

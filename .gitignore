@@ -38,6 +38,7 @@ ros_logs/
 /stage/
 /private/
 /.packaging/
+/.mapping_legacy/
 /obj-*/
 *.deb
 # Checked-in proprietary runtime artifacts are installed by
