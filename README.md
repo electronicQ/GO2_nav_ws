@@ -676,7 +676,31 @@ ros2 param set /controller_server FollowPath.max_speed_xy 0.2
 [sport_model.hpp](src/robot/go2_twist_bridge/include/sport_model.hpp)，
 除非明确了解宇树运动接口，否则不要随意修改。
 
-RViz 的地图、代价地图、点云、TF 和路径显示都在
+定位导航默认使用
+[localization_nav_light.rviz](src/integration/go2_nav_bringup/config/rviz/localization_nav_light.rviz)：
+10 FPS，显示二维地图、局部代价地图、全局/局部规划路径及 `base_link` 坐标轴。
+历史地图点云、实时原始点云、配准点云、轨迹点云和全局代价地图默认关闭，
+需要时可以逐项勾选。顶部 `2D Goal Pose` 工具仍发布 `/goal_pose` 给 Nav2，
+关闭点云显示不影响定位、避障或下发目标。显示帧率不改变 LIO 或 TF 发布频率。
+
+`rviz:=true` 开启该轻量视图，`rviz:=false` 不启动 RViz。
+使用 `rviz_config` 可以选择其他配置，例如恢复完整调试视图：
+
+```bash
+ros2 launch go2_nav_bringup localization_nav.launch.py \
+  sensor_source:=bag \
+  bag_path:=$GO2_NAV_WORKSPACE/bag/zoulang \
+  map_path:=$GO2_NAV_WORKSPACE/maps/16zoulang_map \
+  control_robot:=false rviz:=true \
+  rviz_config:=$(ros2 pkg prefix --share go2_nav_bringup)/config/rviz/localization_nav.rviz
+```
+
+远程运行 RViz 可以进一步将渲染负载移到操作电脑。不过当前 bag 模式在 launch
+内部强制 `ROS_LOCALHOST_ONLY=1`，直接在另一台电脑打开 RViz 无法接入；需要先
+调整该隔离配置，并统一 ROS Domain、DDS 和网络发现设置。实机故障仍需在机器狗
+主机上验证，轻量视图不能保证解决 GPU 驱动、软件渲染、内存或温度导致的资源问题。
+
+完整调试视图的地图、代价地图、点云、TF 和路径显示在
 [localization_nav.rviz](src/integration/go2_nav_bringup/config/rviz/localization_nav.rviz)：
 
 - `Nav2 Global Plan` 显示 `/plan`。

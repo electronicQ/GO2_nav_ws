@@ -33,7 +33,8 @@ def _setup(context):
         'sensor_source', 'bag_path', 'map_path', 'calibration_file',
         'voxel_config', 'relocalization_config', 'params_file',
         'lidar_config', 'control_robot', 'bag_start_paused', 'bag_rate',
-        'sensor_serial_port', 'sensor_serial_baud', 'rviz', 'use_sim_time',
+        'sensor_serial_port', 'sensor_serial_baud', 'rviz', 'rviz_config',
+        'use_sim_time',
     )
     args = {
         name: LaunchConfiguration(name).perform(context)
@@ -168,9 +169,7 @@ def _setup(context):
         executable='rviz2',
         name='rviz2',
         output='screen',
-        arguments=['-d', str(
-            Path(get_package_share_directory('go2_nav_bringup'))
-            / 'config/rviz/localization_nav.rviz')],
+        arguments=['-d', args['rviz_config']],
         parameters=[{'use_sim_time': use_sim_time}],
         condition=IfCondition(args['rviz']),
     )
@@ -237,6 +236,12 @@ def generate_launch_description():
             'sensor_serial_port', default_value='/dev/imu_usb'),
         DeclareLaunchArgument('sensor_serial_baud', default_value='115200'),
         DeclareLaunchArgument('rviz', default_value='true'),
+        DeclareLaunchArgument(
+            'rviz_config',
+            default_value=str(
+                Path(get_package_share_directory('go2_nav_bringup'))
+                / 'config/rviz/localization_nav_light.rviz'),
+            description='RViz configuration; lightweight navigation view by default.'),
         DeclareLaunchArgument('use_sim_time', default_value='auto'),
         OpaqueFunction(function=_setup),
     ])

@@ -17,6 +17,7 @@ setup(
         ('share/' + package_name + '/config/rviz', [
             'config/rviz/mapping.rviz',
             'config/rviz/localization_nav.rviz',
+            'config/rviz/localization_nav_light.rviz',
         ]),
     ],
     install_requires=['setuptools', 'PyYAML'],
