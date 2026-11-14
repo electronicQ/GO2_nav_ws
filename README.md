@@ -343,7 +343,7 @@ ros2 launch voxel_map_tools_runtime process_map.launch.py \
 
 ## 定位与导航
 
-bag 回放、不控制实机：
+### （1）bag包：IMU/雷达bag包测试定位与导航（不控制 GO2）
 
 ```bash
 source scripts/setup_env.sh
@@ -373,7 +373,61 @@ source scripts/setup_env.sh
 如果启动实验时设置了独立 Domain，检查终端也必须设置相同的
 `ROS_DOMAIN_ID`；全部使用默认 Domain 0 时不需要设置。
 
-实机：
+### （2）实机：仅外置 IMU/雷达测试定位与导航（不控制 GO2）
+
+不启动 GO2 速度桥时，可以只使用外置 IMU、激光雷达和历史地图测试定位、
+全局/局部代价地图、Nav2 规划与 RViz 显示。机器狗可以不上电，也可以由原厂
+遥控器手动移动；本工作空间不会向宇树运动 API 发送自动控制请求。
+
+先清除可能残留的 GO2 DDS 网卡绑定：
+
+```bash
+cd "$HOME/GO2_nav_ws"
+
+unset GO2_NETWORK_INTERFACE
+unset CYCLONEDDS_URI
+source scripts/setup_env.sh
+
+ros2 launch go2_nav_bringup localization_nav.launch.py \
+  sensor_source:=live \
+  map_path:=$GO2_NAV_WORKSPACE/maps/my_scene_sc_map \
+  calibration_file:=$GO2_NAV_WORKSPACE/config/calibration/current_robot.yaml \
+  control_robot:=false \
+  rviz:=true
+```
+
+该模式仍会启动 IMU、雷达、Voxel-SLAM、`map_server`、Nav2、全局/局部代价
+地图和 RViz，但不会启动 `go2_twist_bridge`。Nav2 发布的 `/cmd_vel` 不会转发
+到真实机器狗。需要观察动态定位效果时，可用原厂遥控器手动缓慢移动机器人。
+
+无机器狗、只供电给外置传感器时也可以启动并观察静态定位、地图、TF 和代价
+地图，但由于没有实际运动，无法验证运动过程中的定位连续性。
+
+确认局部和全局定位状态：
+
+```bash
+ros2 topic echo /localization/state
+ros2 topic echo /localization/local_valid
+ros2 topic echo /localization/valid
+```
+
+定位有效后检查完整 TF：
+
+```bash
+ros2 run tf2_ros tf2_echo odom imu_link
+ros2 run tf2_ros tf2_echo map odom
+ros2 run tf2_ros tf2_echo map base_link
+```
+
+状态进入 `GLOBAL_TRACKING` 且 `/localization/valid=true` 后，可在 RViz 中
+发送 `Nav2 Goal`。应能看到栅格地图、膨胀层、全局/局部代价地图、
+`/plan` 和 `/local_plan`、历史地图点云、实时点云和当前扫描。
+
+如果只有 `LOCAL_ONLY` 或缺少 `map→odom`，说明局部 LIO 正常但全局重定位
+尚未通过，此时应检查历史地图、实时点云和 `current_robot.yaml` 外参是否
+来自同一套建图配置，而不是仅把 `control_robot` 改为 `true`。
+
+### （3）实机：机器狗/IMU/雷达全部开启测试定位与导航（控制 GO2）
 
 ```bash
 export GO2_NETWORK_INTERFACE=enp4s0
