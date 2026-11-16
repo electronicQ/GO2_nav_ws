@@ -461,162 +461,179 @@ map → odom → imu_link → base_link
 Nav2 的 `robot_base_frame` 是 `base_link`，不发布旧
 `odom→base_footprint`。不要同时启动旧 `go2_driver`，否则会产生重复 TF。
 
-## 参数配置
+## 各步骤参数配置
 
-只修改 `src/`、`config/`、`scripts/` 下的源码和配置文件，不要直接修改
-`install/` 中的生成文件。本工作空间默认使用 `--symlink-install`，YAML 和
-launch 修改通常会在节点或 launch 重启后生效；C++ 源码修改后仍需重新构建对应包。
+下面按前面的三个启动功能列出实际使用的配置。只修改 `src/`、`config/` 下的
+源文件，不直接修改 `install/` 中的生成文件。默认使用 `--symlink-install`，
+已有 YAML 和 launch 修改后需要重启对应功能；C++ 修改后需要重新构建对应包。
+同一参数出现多次时，后加载的值覆盖前面的值。
 
-### 各步骤参数文件快速索引
+### （1） 建图：`go2_nav_bringup mapping.launch.py`
 
-| 功能或步骤 | 参数文件 | 主要配置内容 |
-|---|---|---|
-| ROS Domain、RMW、GO2 网卡 | [scripts/setup_env.sh](scripts/setup_env.sh) | `ROS_DOMAIN_ID` 默认值、`RMW_IMPLEMENTATION`、`GO2_NETWORK_INTERFACE`、工作空间加载 |
-| 构建依赖 | [colcon_defaults.yaml](colcon_defaults.yaml) | 构建类型、`--symlink-install`、源码路径 |
-| 包级构建选项 | [colcon.meta](colcon.meta) | GTSAM、TEASER++、SC-QN、RS16 PCAP 开关 |
-| 外置 IMU | [mapping.launch.py](src/integration/go2_nav_bringup/launch/mapping.launch.py) 和 [localization_nav.launch.py](src/integration/go2_nav_bringup/launch/localization_nav.launch.py) | `sensor_serial_port`、`sensor_serial_baud` |
-| 外置 RS16 雷达 | [config.yaml](src/sensors/rslidar_sdk/config/config.yaml) | 雷达型号、MSOP/DIFOP 端口、雷达帧、点云话题、时钟来源、距离范围 |
-| IMU、雷达、`base_link` 外参 | [current_robot.yaml](config/calibration/current_robot.yaml) | `imu_to_base`、`imu_to_lidar`、标定和实机控制授权 |
-| 实时或 bag 建图入口 | [mapping.launch.py](src/integration/go2_nav_bringup/launch/mapping.launch.py) | `sensor_source`、`bag_path`、`map_name`、`auto_finish`、`auto_finish_mode`、`finish_delay_sec`、`legacy_save_root`、`use_sim_time`、`rviz` |
-| Voxel-SLAM 建图算法 | [ros2_rslidar_slam.yaml](src/localization/voxel_slam/config/ros2_rslidar_slam.yaml) | 建图话题、IMU/雷达外参、LIO、局部 BA、回环、全局 BA、地图导出 |
-| 地图处理 | [default.yaml](src/localization/voxel_map_tools_runtime/config/default.yaml) | 输入地图、地面拟合、障碍高度、栅格分辨率、动态点剔除 |
-| 地图处理入口 | [process_map.launch.py](src/localization/voxel_map_tools_runtime/launch/process_map.launch.py) | `input_map`、`output_dir`、`calibration_file`、`overwrite` |
-| 定位入口 | [localization_nav.launch.py](src/integration/go2_nav_bringup/launch/localization_nav.launch.py) | 地图、bag、标定、RViz、是否控制 GO2、传感器输入 |
-| Voxel-SLAM 输入和 LIO | [ros2_localization_rslidar.yaml](src/localization/voxel_slam/config/ros2_localization_rslidar.yaml) | 定位话题、雷达/IMU 外参、LIO 噪声、局部位姿输出 |
-| 定位有效期和双 TF | [ros2_localization_common.yaml](src/localization/voxel_slam/config/ros2_localization_common.yaml) | `map→odom`、修正时效、失效门限、状态检查 |
-| 全局重定位 | [ros2_scancontext_rslidar_relocalization.yaml](src/localization/voxel_slam/config/ros2_scancontext_rslidar_relocalization.yaml) | Scan Context、Quatro、Nano-GICP、候选数和配准门限 |
-| Nav2 全局与局部导航 | [nav2_params.yaml](src/navigation/go2_navigation2/config/nav2_params.yaml) | BT Navigator、DWB、NavFn、代价地图、膨胀、恢复行为和速度平滑 |
-| GO2 控制门控 | [localization_nav.launch.py](src/integration/go2_nav_bringup/launch/localization_nav.launch.py) 和 [twist_bridge.cpp](src/robot/go2_twist_bridge/src/twist_bridge.cpp) | `valid`、允许状态、定位/速度超时、停止请求 |
-| RViz 显示 | [localization_nav.rviz](src/integration/go2_nav_bringup/config/rviz/localization_nav.rviz) | 地图、代价地图、TF、历史/实时点云、全局/局部路径 |
-
-### 传感器参数
-
-RS16 的实际驱动参数在
-[src/sensors/rslidar_sdk/config/config.yaml](src/sensors/rslidar_sdk/config/config.yaml)：
-
-```yaml
-lidar_type: RS16
-msop_port: 6699
-difop_port: 7788
-use_lidar_clock: false
-ros_frame_id: rslidar
-ros_send_point_cloud_topic: /rslidar_points
-```
-
-- 更换雷达型号或固件时修改 `lidar_type`。
-- 雷达和主机不在同一时钟源时保持 `use_lidar_clock: false`。
-- 点云帧名必须继续与标定文件中的 `lidar_frame` 一致。
-- 修改端口后，主机防火墙和网卡配置也要同步调整。
-
-外置 IMU 的串口和波特率通过 launch 参数配置：
+对应前面的实时建图和 Bag 建图命令，例如：
 
 ```bash
 ros2 launch go2_nav_bringup mapping.launch.py \
   sensor_source:=live \
-  sensor_serial_port:=/dev/imu_usb \
-  sensor_serial_baud:=115200
+  map_name:=my_scene_sc_map \
+  calibration_file:=$GO2_NAV_WORKSPACE/config/calibration/current_robot.yaml
 ```
 
-如需修改默认串口、波特率或帧名，编辑
-[launch_utils.py](src/integration/go2_nav_bringup/go2_nav_bringup/launch_utils.py)
-中的 `sensor_nodes()`。IMU 数据解析、单位和比例在
+实时和 bag 模式使用同一份建图算法配置；`sensor_source:=bag` 时从
+`bag_path` 回放传感器数据，不启动实时雷达和 IMU 驱动。
+
+| 配置文件 | 配置内容 | 如何选择或覆盖 |
+|---|---|---|
+| [ros2_rslidar_slam.yaml](src/localization/voxel_slam/config/ros2_rslidar_slam.yaml) | 雷达解析、LIO、局部 BA、回环、全局 BA、逐帧地图导出 | `voxel_config:=<文件路径>` |
+| [current_robot.yaml](config/calibration/current_robot.yaml) | IMU 到雷达、IMU 到车体的外参和坐标系名 | `calibration_file:=<文件路径>`；默认 `auto` 使用此文件 |
+| [雷达 config.yaml](src/sensors/rslidar_sdk/config/config.yaml) | 实时雷达型号、端口、距离过滤、时间戳和点云话题 | `lidar_config:=<文件路径>`；仅 live 模式启动驱动时使用 |
+| [mapping.rviz](src/integration/go2_nav_bringup/config/rviz/mapping.rviz) | 建图 RViz 显示 | 此入口固定使用该文件；`rviz:=false` 关闭 RViz |
+| [mapping.launch.py](src/integration/go2_nav_bringup/launch/mapping.launch.py) | 输入模式、bag、输出地图名、结束方式、串口、仿真时间 | 启动命令的同名参数覆盖默认值 |
+
+建图节点先加载 `ros2_rslidar_slam.yaml`，再由 launch 覆盖运行模式、仿真时间、
+地图输出路径、旧格式保存目录和雷达外参。**外参以标定文件为准，地图输出以
+`map_name` 为准**；在算法 YAML 中修改这些被覆盖的字段不会改变该入口的最终值。
+
+| 常用参数或参数组 | 修改位置与作用 |
+|---|---|
+| `General.lid_topic`、`General.imu_topic` | 建图算法 YAML：输入话题 |
+| `General.lidar_type`、`General.blind` | 建图算法 YAML：点云解析类型和盲区过滤 |
+| `General.map_scan_leaf_size_m` | 建图算法 YAML：保存逐帧地图时的降采样边长 |
+| `Odometry.*` | 建图算法 YAML：LIO 噪声、IMU 预测时间和位姿坐标系 |
+| `LocalBA.*`、`Loop.*`、`GBA.*` | 建图算法 YAML：局部优化、回环和最终全局优化 |
+| `map_name` | 启动参数：输出到 `$GO2_NAV_WORKSPACE/maps/<map_name>`；目录必须尚不存在 |
+| `auto_finish`、`auto_finish_mode`、`finish_delay_sec` | 启动参数：bag 结束后是否自动导出、是否执行最终全局 BA、等待时间 |
+| `legacy_save_root` | 启动参数：旧格式中间文件的保存根目录 |
+| `bag_path`、`bag_rate`、`bag_start_paused` | 启动参数：bag 路径、回放速度和是否暂停开始 |
+
+#### 建图与定位共用的传感器、标定和环境
+
+实时建图和实时定位使用同一份雷达驱动配置，当前
+[config.yaml](src/sensors/rslidar_sdk/config/config.yaml) 中型号为
+`RSHELIOS_16P`，MSOP/DIFOP 端口为 `6699/7788`，`min_distance=1`，
+`use_lidar_clock=false`，点云话题为 `/rslidar_points`。更换型号时修改驱动的
+`lidar_type`；它与 Voxel-SLAM 算法 YAML 中的数字解析类型属于不同配置项。
+点云帧名应与标定文件的 `lidar_frame` 一致。
+
+外置 IMU 的串口和波特率通过两个集成 launch 的
+`sensor_serial_port`、`sensor_serial_baud` 指定，例如
+`sensor_serial_port:=/dev/imu_usb sensor_serial_baud:=115200`。
+驱动启动参数见 [launch_utils.py](src/integration/go2_nav_bringup/go2_nav_bringup/launch_utils.py)
+的 `sensor_nodes()`；数据解析、单位和比例见
 [wit_ros2_imu.py](src/sensors/wit_ros2_imu/wit_ros2_imu/wit_ros2_imu.py)。
 
-### 标定参数
+三个功能默认都读取 [current_robot.yaml](config/calibration/current_robot.yaml)：
 
-当前实机的唯一标定入口是
-[config/calibration/current_robot.yaml](config/calibration/current_robot.yaml)：
+| 标定字段 | 使用位置 |
+|---|---|
+| `imu_to_lidar.translation`、`rotation_xyzw` | 建图和定位的 `General.extrinsic_tran`、`General.extrinsic_rota`；定位静态 TF `imu_link→rslidar` |
+| `imu_to_base`、`imu_frame`、`base_frame`、`lidar_frame` | 定位导航静态 TF 和手动初始位姿的车体参考系 |
+| `imu_to_lidar.translation` | 地图处理的 `dynamic_removal.sensor_origin_imu_m` |
+| `calibration_ready`、`robot_motion_authorized` | 标定就绪和实机运动授权检查 |
 
-```yaml
-imu_frame: imu_link
-base_frame: base_link
-lidar_frame: rslidar
-calibration_ready: true
-robot_motion_authorized: true
+建图和定位应使用一致的外参，修改后不能直接与旧标定生成的地图混用。
+ROS Domain、RMW、GO2 网卡和工作空间环境统一在
+[scripts/setup_env.sh](scripts/setup_env.sh) 中加载；网卡通过
+`GO2_NETWORK_INTERFACE` 指定。
 
-imu_to_base:
-  translation: [x, y, z]
-  rotation_xyzw: [qx, qy, qz, qw]
+### （2） 地图处理：`voxel_map_tools_runtime process_map.launch.py`
 
-imu_to_lidar:
-  translation: [x, y, z]
-  rotation_xyzw: [qx, qy, qz, qw]
+对应前面的地图处理命令：
+
+```bash
+ros2 launch voxel_map_tools_runtime process_map.launch.py \
+  input_map:=$GO2_NAV_WORKSPACE/maps/my_scene_sc_map \
+  overwrite:=true
 ```
 
-`imu_to_lidar` 会同时用于：
+| 配置文件 | 配置内容 | 如何选择或覆盖 |
+|---|---|---|
+| [default.yaml](src/localization/voxel_map_tools_runtime/config/default.yaml) | 地面拟合、障碍高度、栅格、动态点剔除及各类输出 | `config:=<文件路径>` |
+| [current_robot.yaml](config/calibration/current_robot.yaml) | 动态点剔除使用的雷达射线原点 | `calibration_file:=<文件路径>` |
+| [process_map.launch.py](src/localization/voxel_map_tools_runtime/launch/process_map.launch.py) | 输入、输出、标定覆盖和是否替换已有结果 | `input_map`、`output_dir`、`calibration_file`、`overwrite` |
 
-- 静态 TF `imu_link→rslidar`；
-- Voxel-SLAM 的 `General.extrinsic_tran` 和 `General.extrinsic_rota`；
-- 地图处理动态剔除的 `sensor_origin_imu_m`。
+加载顺序为：读取处理 YAML → 用非空的 `input_map`、`output_dir` 启动参数覆盖
+对应路径 → 用标定文件覆盖 `dynamic_removal.sensor_origin_imu_m` → 执行处理。
+默认输出到输入地图的 `processed/`；已有输出时需要 `overwrite:=true`。
+如确实需要使用处理 YAML 中的射线原点，可传 `calibration_file:=''`。
 
-建图和定位必须使用同一份外参。修改外参后，旧地图不能直接与新外参混用，
-需要重新建图。实机控制前才把 `robot_motion_authorized` 改为 `true`。
-
-### 建图和地图处理参数
-
-建图阶段最常修改的是
-[ros2_rslidar_slam.yaml](src/localization/voxel_slam/config/ros2_rslidar_slam.yaml)：
-
-| 参数 | 作用 |
+| 处理 YAML 参数组 | 作用 |
 |---|---|
-| `General.lid_topic` | 雷达输入话题，当前为 `/rslidar_points` |
-| `General.imu_topic` | IMU 输入话题，当前为 `/imu/data_raw` |
-| `General.lidar_type` | Voxel-SLAM 的雷达解析类型 |
-| `General.blind` | 雷达盲区过滤 |
-| `General.map_scan_leaf_size_m` | 保存逐帧地图时的降采样边长 |
-| `Odometry.*` | LIO 噪声、预测时间和局部位姿坐标系 |
-| `LocalBA.*` | 局部 BA 窗口和优化参数 |
-| `Loop.*` | 回环检测和 ICP 参数 |
-| `GBA.*` | 最终全局 BA 参数 |
+| `outputs.*` | 完整、去地面、障碍点云和二维栅格的输出及降采样 |
+| `window.*`、`preprocess.*` | 地面拟合窗口和预处理 |
+| `ground.*` | 地面拟合、坡度、连续性及地面高度容差 |
+| `obstacles.min_height_m/max_height_m` | 进入栅格障碍层的地面以上高度范围 |
+| `grid.resolution_m` | 二维栅格分辨率 |
+| `dynamic_removal.*` | 动态点剔除开关和证据阈值 |
 
-通过顶层 launch 的 `map_name` 指定输出目录更安全，例如
-`map_name:=my_scene_sc_map` 会输出到
-`$GO2_NAV_WORKSPACE/maps/my_scene_sc_map`。直接改 YAML 中的
-`General.map_export_path` 也可，但目录必须尚不存在。
+此步骤不加载建图或定位算法 YAML。定位匹配使用地图包的原始逐帧扫描；
+处理后的 `map.yaml/map.pgm` 用于 Nav2，`map_full.pcd` 用于历史地图显示。
 
-地图处理参数在
-[voxel_map_tools_runtime/config/default.yaml](src/localization/voxel_map_tools_runtime/config/default.yaml)。
-直接修改该工作空间文件并重新执行
-`ros2 launch voxel_map_tools_runtime process_map.launch.py` 即可生效：
+### （3） 定位导航：`go2_nav_bringup localization_nav.launch.py`
 
-| 参数组 | 主要作用 |
+对应前面的 bag、仅传感器实机和控制 GO2 三种定位导航命令，例如：
+
+```bash
+ros2 launch go2_nav_bringup localization_nav.launch.py \
+  sensor_source:=live \
+  map_path:=$GO2_NAV_WORKSPACE/maps/my_scene_sc_map \
+  calibration_file:=$GO2_NAV_WORKSPACE/config/calibration/current_robot.yaml \
+  control_robot:=false
+```
+
+三种模式使用相同的定位与导航配置。`sensor_source` 选择实时驱动或 bag 回放；
+`control_robot` 决定是否启动 GO2 速度桥，不切换定位算法或 Nav2 参数。
+
+| 配置文件 | 配置内容 | 如何选择或覆盖 |
+|---|---|---|
+| [ros2_localization_rslidar.yaml](src/localization/voxel_slam/config/ros2_localization_rslidar.yaml) | 雷达解析、局部 LIO、IMU 高频预测、LocalBA、定位显示 | `voxel_config:=<文件路径>` |
+| [ros2_localization_common.yaml](src/localization/voxel_slam/config/ros2_localization_common.yaml) | DIRECT 匹配、双 TF 时效、修正确认和后续点云验证 | 集成 launch 固定加载；DIRECT 开关有下述覆盖 |
+| [ros2_scancontext_rslidar_relocalization.yaml](src/localization/voxel_slam/config/ros2_scancontext_rslidar_relocalization.yaml) | 历史扫描融合、地图缓存、SC 候选、Quatro、Nano-GICP 和 SC 修正跳变限制 | `relocalization_config:=<文件路径>` |
+| [current_robot.yaml](config/calibration/current_robot.yaml) | 雷达外参、静态 TF、车体参考系及控制授权 | `calibration_file:=<文件路径>` |
+| [nav2_params.yaml](src/navigation/go2_navigation2/config/nav2_params.yaml) | 规划器、局部控制器、代价地图、足迹、速度和平滑器 | `params_file:=<文件路径>` |
+| [雷达 config.yaml](src/sensors/rslidar_sdk/config/config.yaml) | 实时雷达驱动 | `lidar_config:=<文件路径>`；仅 live 模式使用 |
+| [localization_nav_light.rviz](src/integration/go2_nav_bringup/config/rviz/localization_nav_light.rviz) | 默认轻量 RViz 显示和交互工具 | `rviz_config:=<文件路径>`；`rviz:=false` 关闭 |
+| 地图目录下的 `processed/map.yaml` | Nav2 静态地图及栅格图片路径 | 由 `map_path` 解析得到 |
+| [localization_nav.launch.py](src/integration/go2_nav_bringup/launch/localization_nav.launch.py) | 地图、运行模式、串口、时间、控制桥门控及最终参数覆盖 | 启动参数覆盖默认值；固定覆盖项见下文 |
+
+#### 定位参数的加载顺序与覆盖
+
+Voxel-SLAM 节点按以下顺序加载：
+
+```text
+voxel_config（默认 ros2_localization_rslidar.yaml）
+  → ros2_localization_common.yaml
+  → relocalization_config（默认 ros2_scancontext_rslidar_relocalization.yaml）
+  → 集成 launch 的显式覆盖参数
+```
+
+最后的显式覆盖包括：定位模式、地图路径、关闭旧地图保存、固定输入话题
+`/rslidar_points` 和 `/imu/data_raw`、历史显示点云路径、标定雷达外参、
+手动初始位姿的 `base_frame`、仿真时间，以及
+**`Localization.direct_match.enabled=true`**。
+
+因此，公共 YAML 中虽然写着 `enabled: false`，此集成入口仍保持
+“首次 SC 定位 → DIRECT 持续修正 → 连续失败或修正超时后启用 SC 恢复”的策略。
+如需关闭此入口的 DIRECT，应修改该 launch 中的显式覆盖值；只修改公共 YAML
+或 `relocalization_config` 中的开关会再次被覆盖。
+原生 `vxlm_localization_rslidar.launch.py` 没有这一强制开启项，仍采用公共 YAML
+的 `false`；不要混淆两个入口的最终值。
+
+| 想调整的行为 | 对应配置位置 |
 |---|---|
-| `input_map`、`output_dir` | 输入 v4 地图和输出目录 |
-| `outputs.*` | 是否输出完整点云、去地面点云、障碍点云和栅格地图 |
-| `ground.*` | 地面拟合、坡度、连续性和地面高度容差 |
-| `obstacles.min_height_m/max_height_m` | 进入 Nav2 栅格障碍层的地面以上高度 |
-| `grid.resolution_m` | Nav2 地图分辨率 |
-| `dynamic_removal.*` | 动态点剔除门限 |
+| 局部里程计、预测上限、局部 BA | 传感器定位 YAML 的 `Odometry.*`、`LocalBA.*` |
+| DIRECT 尝试周期、位移/角度触发、目标范围和配准阈值 | 公共 YAML 的 `Localization.direct_match.*`（开关除外，见上文） |
+| 全局修正过期、双 TF 修正确认、后续点云验证 | 公共 YAML 的 `Localization.dual_tf.*` |
+| SC 查询融合帧数、候选数、描述子阈值 | SC YAML 的 `Localization.scancontext.*` |
+| 历史描述子融合帧数和抽样间距 | SC YAML 的 `Localization.history.*` |
+| SC 已对齐后的候选距离及修正跳变限制 | SC YAML 的 `candidate_max_distance_m`、`max_correction_translation_m`、`max_correction_rotation_deg`，均位于 `Localization.scancontext` 下 |
+| IMU/雷达和车体安装外参 | 标定 YAML；不要单独修改算法 YAML 中会被覆盖的外参 |
 
-`dynamic_removal.sensor_origin_imu_m` 默认由 launch 的 `calibration_file`
-覆盖，以保证与建图标定一致。如果确实要以 YAML 中的值为准，可传
-`calibration_file:=''`。
+`use_sim_time` 默认根据输入自动选择：bag 为 `true`，live 为 `false`。
+`GLOBAL_STALE` 频繁出现时，应同时检查传感器输入、处理延迟、配准结果和公共配置
+中的时效参数；放宽阈值不会恢复已经停止的局部里程计。
 
-### 定位参数
-
-定位传感器和 LIO 参数在
-[ros2_localization_rslidar.yaml](src/localization/voxel_slam/config/ros2_localization_rslidar.yaml)：
-
-- `General.lid_topic`、`General.imu_topic`：输入话题。
-- `General.extrinsic_*`：由标定文件覆盖，不建议在 YAML 中单独改。
-- `Odometry.*`：局部里程计、IMU 高频预测和坐标系。
-- `Localization.visualization.*`：历史地图显示点云。
-
-定位稳定性和时效参数在
-[ros2_localization_common.yaml](src/localization/voxel_slam/config/ros2_localization_common.yaml)；
-Scan Context 重定位在
-[ros2_scancontext_rslidar_relocalization.yaml](src/localization/voxel_slam/config/ros2_scancontext_rslidar_relocalization.yaml)。
-
-常见定位调参：
-
-- 初次重定位慢：检查 `scancontext.query_scans`、`candidates` 和 `distance_threshold`。
-- 定位修正频繁跳变：减小 `max_correction_translation_m` 和
-  `max_correction_rotation_deg`。
-- `GLOBAL_STALE` 出现频繁：检查 `max_result_age_sec`、`stale_after_sec`、
-  `global_valid_timeout_sec` 以及实时输入频率。
-- 始终只有局部里程计：检查地图路径、输入点云格式、标定一致性和 SC-QN 编译日志。
-
-### Nav2 参数
+#### Nav2：规划、避障和速度
 
 Nav2 的所有运行参数集中在
 [go2_navigation2/config/nav2_params.yaml](src/navigation/go2_navigation2/config/nav2_params.yaml)。
@@ -658,7 +675,7 @@ ros2 param set /controller_server FollowPath.max_speed_xy 0.2
 
 运行时 `ros2 param set` 不一定永久，正式值应写回源码 YAML。
 
-### GO2 控制桥接和 RViz
+#### GO2 控制桥接和 RViz
 
 控制门控参数位于
 [localization_nav.launch.py](src/integration/go2_nav_bringup/launch/localization_nav.launch.py)：

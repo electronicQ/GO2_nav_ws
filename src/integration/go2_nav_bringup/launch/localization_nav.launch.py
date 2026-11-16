@@ -98,6 +98,10 @@ def _setup(context):
         output='screen',
         parameters=[
             args['voxel_config'],
+            str(
+                Path(get_package_share_directory('voxel_slam'))
+                / 'config/ros2_localization_common.yaml'
+            ),
             args['relocalization_config'],
             {
                 'use_sim_time': use_sim_time,
@@ -107,6 +111,9 @@ def _setup(context):
                 'General.lid_topic': '/rslidar_points',
                 'General.imu_topic': '/imu/data_raw',
                 'Localization.map_path': str(map_dir),
+                # Preserve this integration entry's existing DIRECT tracking
+                # policy; the native localization entry defaults to SC only.
+                'Localization.direct_match.enabled': True,
                 'Localization.initialpose_base_frame': base_frame,
                 'Localization.visualization.publish_map_cloud': True,
                 'Localization.visualization.map_cloud_path': str(map_cloud),
