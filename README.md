@@ -727,6 +727,55 @@ ros2 launch go2_nav_bringup localization_nav.launch.py \
 
 修改 `.rviz` 后需要在 RViz 中重新打开配置，或重启定位导航 launch。
 
+## 定位导航性能监测
+
+只读脚本 [scripts/monitor_navigation.py](scripts/monitor_navigation.py) 可与导航同时运行，
+不发送运动指令、不订阅原始点云，不需要 sudo、sysstat 或重新编译。
+在机器狗主机的新终端加载与导航相同的环境（尤其是 ROS Domain、DDS 和网卡），然后运行：
+
+```bash
+cd "$GO2_NAV_WORKSPACE"
+source scripts/setup_env.sh
+python3 scripts/monitor_navigation.py --mode live
+```
+
+默认一直记录，按 **回车** 标记一次观察到的停顿，按 **Ctrl+C** 结束并打包。
+也可以设置 `--duration 180` 记录 3 分钟。建议包含下目标前、正在导航、出现停顿、
+恢复后的过程。开/关 RViz 对照测试应分别记录一份报告。
+输出在 `~/go2_perf_logs/navigation_日期时间/`，结束时会打印旁边 `.tar.gz` 的完整路径；
+发回这个压缩文件即可。`--output /path/to/reports` 可更改输出父目录。
+
+bag 回放时使用同一个 ROS Domain，改为：
+
+```bash
+python3 scripts/monitor_navigation.py --mode bag --duration 180
+```
+
+bag 模式自动使用与集成 launch 相同的 Fast DDS、localhost-only 和模拟时间；
+实机模式保留当前终端的 DDS/网卡配置。脚本运行后若提示没有 ROS 消息，应先核对
+环境和节点是否已启动，此时不能将缺少消息认定为定位故障。
+没有 ROS 环境时仍会记录系统数据并在报告中说明；也可显式指定 `--system-only`。
+
+报告主要内容：
+
+- `metadata.json`：主机、CPU、网络、图形渲染器（能查询时）、Git 版本及监测环境。
+- `cpu.csv`、`processes.csv`、`threads.csv`：每核 CPU，以及关键进程和最忙的线程。
+  进程/线程 CPU 以单核 100% 为单位，线程默认每进程每次保留前 8 个。
+- `system.csv`、`disks.csv`、`sensors.csv`：内存、交换、系统压力、磁盘吞吐/I/O 等待、
+  温度、CPU 频率及硬件支持时的节流计数。磁盘与分区不能重复求和。
+- `topics.csv`：速度、IMU、里程计、两条动态 TF 和定位状态的每秒接收统计、
+  当前持续失联时间和源时间戳年龄，不记录高带宽原始点云。
+- `events.jsonl`：消息间隔异常、定位状态变化、导航 action 状态、生命周期、
+  发布/订阅端发现信息和人工时间标记。
+- `summary.json`：整体汇总，以及仅在同一 FollowPath 执行段中的消息间隔，
+  避免把等待新目标的正常停发混入控制卡顿；持续未恢复的停发需结合 `topics.csv`。
+- `ros_logs/`：相关节点日志尾部及最近三次 launch 日志尾部，每个文件最多 192 KiB。
+
+采样间隔默认 1 秒；`--interval 2 --top-threads 4` 可以进一步降低监测负担。
+消息间隔是监测节点收到消息的时间，可能受 DDS 或监测节点调度影响；需要将它与
+CPU/线程、TF/里程计、action 状态和节点日志对齐后判断原因。报告会记录监测程序
+自身 CPU 用时，不会仅凭高负载就认定其为根因。
+
 ## 目录
 
 - `src/sensors`：外置 IMU、RS16 驱动及雷达消息。
