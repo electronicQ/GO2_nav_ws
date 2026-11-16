@@ -8,6 +8,8 @@
 #include "direct_matching.hpp"
 #include "scancontext_relocalization.hpp"
 #include <std_msgs/msg/float64.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include "localization_display.hpp"
 #include "localization_btc.hpp"
 #include "localization_history.hpp"
@@ -865,6 +867,9 @@ public:
   string relocalization_backend = "btc";
   ScanContextOptions scancontext_options;
   DualTfAlignment dual_alignment;
+  string initialpose_base_frame;
+  std::unique_ptr<tf2_ros::Buffer> initialpose_tf_buffer;
+  std::unique_ptr<tf2_ros::TransformListener> initialpose_tf_listener;
   struct DualScan { std::uint64_t epoch; IMUST state; PVecPtr points; };
   deque<DualScan> dual_scans;
   deque<DualScan> dual_latest_scans;
@@ -1203,7 +1208,6 @@ public:
           });
     }
     if(operation_mode == "localization" && rviz_initialpose_enabled)
-      if(!dual_tf)
       sub_initialpose = n.subscribe<geometry_msgs::msg::PoseWithCovarianceStamped>(
           "/initialpose", 5, &VOXEL_SLAM::initialpose_callback, this);
     if(operation_mode == "localization")
@@ -1260,6 +1264,11 @@ public:
     pub_imu_odom = n.advertise<nav_msgs::Odometry>(imu_odom_topic, 1000);
     if(dual_tf)
     {
+      n.param<string>("Localization/initialpose_base_frame", initialpose_base_frame, "base_link");
+      if(rviz_initialpose_enabled) {
+        initialpose_tf_buffer.reset(new tf2_ros::Buffer(n.node()->get_clock()));
+        initialpose_tf_listener.reset(new tf2_ros::TransformListener(*initialpose_tf_buffer));
+      }
       pub_global_odom = n.advertise<nav_msgs::Odometry>("/localization/odometry", 1000);
       pub_local_valid = n.advertise<std_msgs::Bool>("/localization/local_valid", 1, true);
       pub_global_age = n.advertise<std_msgs::msg::Float64>("/localization/correction_age", 1, true);
@@ -1578,10 +1587,67 @@ public:
         odom_frame, imu_child_frame);
   }
 
+  void apply_dual_initialpose(
+      const geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr &message)
+  {
+    string frame = message->header.frame_id;
+    if(!frame.empty() && frame.front() == '/') frame.erase(0, 1);
+    const auto &pose = message->pose.pose;
+    Eigen::Quaterniond q(pose.orientation.w, pose.orientation.x,
+                         pose.orientation.y, pose.orientation.z);
+    const Eigen::Vector2d xy(pose.position.x, pose.position.y);
+    if(frame != map_frame || !xy.allFinite() || !q.coeffs().allFinite() || q.norm() < 1e-12) {
+      ROS_WARN_STREAM("Rejected RViz initial pose: expected finite 2D pose in " << map_frame);
+      return;
+    }
+    if(!initialpose_tf_buffer || !imu_prediction_ready.load()) {
+      ROS_WARN("Rejected RViz initial pose: local odometry is not initialized; retry after LIO is ready.");
+      return;
+    }
+    const auto epoch = frontend_session_epoch.capture();
+    try {
+      // RViz's pose describes the robot base, not the IMU. Lookup includes the
+      // calibrated IMU->base extrinsic and matches the click's sensor time.
+      const auto local_tf = initialpose_tf_buffer->lookupTransform(
+          odom_frame, initialpose_base_frame, rclcpp::Time(message->header.stamp),
+          rclcpp::Duration::from_seconds(0.2));
+      const auto &t = local_tf.transform;
+      Eigen::Quaterniond local_q(t.rotation.w, t.rotation.x, t.rotation.y, t.rotation.z);
+      Eigen::Isometry3d local = Eigen::Isometry3d::Identity();
+      local.linear() = local_q.normalized().toRotationMatrix();
+      local.translation() = Eigen::Vector3d(t.translation.x, t.translation.y, t.translation.z);
+      q.normalize();
+      const auto rotation = q.toRotationMatrix();
+      const double yaw = std::atan2(rotation(1, 0), rotation(0, 0));
+      string error;
+      // Serialize with the IMU publisher so no already-computed old transform
+      // can be broadcast after the manual correction has been committed.
+      lock_guard<mutex> output_lock(imu_output_mutex);
+      const double now = dual_sensor_time.load();
+      const auto current = dual_alignment.view(now);
+      const Eigen::Isometry3d current_base = current.aligned ? current.map_from_odom * local : local;
+      const auto desired = dual_tf_planar_base_pose(current_base, xy, yaw);
+      if(!frontend_session_epoch.is_current(epoch) ||
+         !dual_alignment.accept_manual(epoch, rclcpp::Time(local_tf.header.stamp).seconds(),
+                                       now, desired, local, error)) {
+        ROS_WARN_STREAM("Rejected RViz initial pose: " << error);
+        return;
+      }
+      ROS_INFO_STREAM("DUAL_TF accepted RViz initial pose: base=" << initialpose_base_frame
+                      << " x=" << xy.x() << " y=" << xy.y() << " yaw=" << yaw
+                      << "; updated map->odom, local odometry unchanged");
+    } catch(const tf2::TransformException &e) {
+      ROS_WARN_STREAM("Rejected RViz initial pose: cannot obtain timestamped local base pose: " << e.what());
+    } catch(const std::exception &e) {
+      ROS_WARN_STREAM("Rejected RViz initial pose: " << e.what());
+    }
+  }
+
   void initialpose_callback(
       const geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr &message)
   {
     if(!rviz_initialpose_enabled || !message) return;
+    if(dual_tf) { apply_dual_initialpose(message); return; }
     const geometry_msgs::msg::Quaternion &orientation =
         message->pose.pose.orientation;
     Eigen::Quaterniond quaternion(orientation.w, orientation.x,
@@ -3481,6 +3547,7 @@ public:
     int direct_failures = 0;
     bool recovery_active = false, previous_was_direct = false;
     std::uint64_t epoch = frontend_session_epoch.capture();
+    auto manual_revision = dual_alignment.view(dual_sensor_time.load()).manual_revision;
     int query_id = 0;
     double last_query_wall = -1;
     bool query_pending = false;
@@ -3537,6 +3604,13 @@ public:
         latest.clear(); direct_schedule.reset(); direct_failures = 0; recovery_active = false;
         sc_since_query = 0;
         epoch = frontend_session_epoch.capture();
+      }
+      const auto current_revision = dual_alignment.view(dual_sensor_time.load()).manual_revision;
+      if(current_revision != manual_revision) {
+        pending = PendingAudit();
+        direct_schedule.reset(); direct_failures = 0; recovery_active = false;
+        previous_was_direct = false; last_query_wall = -1;
+        manual_revision = current_revision;
       }
       if(incoming.empty() && latest_incoming.empty() && !query_pending && !pending.active)
       { ros::Duration(0.005).sleep(); continue; }

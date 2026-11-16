@@ -284,3 +284,62 @@ TEST(DualTfScanContext, DisabledJumpCheckAllowsLargeCorrectionsButRetainsResultC
   EXPECT_NE(reason.find("SC correction jump exceeds limit"),std::string::npos);
   EXPECT_DOUBLE_EQ(a.view(4.1).last_correction_stamp, 2);
 }
+
+TEST(DualTf, ManualPoseOverridesWrongAlignmentAndRetainsBaseExtrinsic) {
+  DualTfAlignment a;
+  std::string reason;
+  ASSERT_TRUE(a.accept_scancontext(0, 1, 1, pose(100), pose(0), reason));
+  const auto local_imu = pose(5, .2);
+  auto imu_base = pose(-.1);
+  imu_base.translation().z() = -.65;
+  const Eigen::Isometry3d local_base = local_imu * imu_base;
+  const auto desired = dual_tf_planar_base_pose(a.view(2).map_from_odom * local_base,
+                                               Eigen::Vector2d(10, 20), 1.1);
+  ASSERT_TRUE(a.accept_manual(0, 2, 2, desired, local_base, reason)) << reason;
+  const auto corrected = a.view(2).map_from_odom * local_base;
+  EXPECT_NEAR(corrected.translation().x(), 10, 1e-9);
+  EXPECT_NEAR(corrected.translation().y(), 20, 1e-9);
+  EXPECT_NEAR(corrected.translation().z(), -.65, 1e-9);
+  EXPECT_NEAR(std::atan2(corrected.linear()(1,0), corrected.linear()(0,0)), 1.1, 1e-9);
+  EXPECT_DOUBLE_EQ(local_imu.translation().x(), 5);
+  EXPECT_FALSE(a.view(2).confirmation_pending);
+  // The automatic computation started before the click must not undo it,
+  // even when its fresh audit samples were collected after the click.
+  EXPECT_FALSE(a.accept(0, 1.9, 3, pose(100), pose(0), reason, 2.9));
+  EXPECT_FALSE(a.accept_scancontext(0, 2, 3, pose(100), pose(0), reason));
+  ASSERT_TRUE(a.accept_scancontext(0, 3, 3, a.view(3).map_from_odom * local_imu,
+                                  local_imu, reason)) << reason;
+}
+
+TEST(DualTf, ManualPoseWorksBeforeAutomaticLocalizationAndRejectsInvalidInputs) {
+  DualTfAlignment a;
+  a.reset(4);
+  std::string reason;
+  ASSERT_TRUE(a.accept_manual(4, 10, 10, pose(20), pose(3), reason));
+  EXPECT_TRUE(a.view(10).aligned);
+  EXPECT_NEAR(a.view(10).map_from_odom.translation().x(), 17, 1e-9);
+  const auto revision = a.view(10).manual_revision;
+  EXPECT_FALSE(a.accept_manual(3, 10, 10, pose(30), pose(3), reason));
+  EXPECT_FALSE(a.accept_manual(4, 1, 10, pose(30), pose(3), reason));
+  EXPECT_FALSE(a.accept_manual(4, 12, 10, pose(30), pose(3), reason));
+  auto bad = pose(0); bad.translation().x() = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(a.accept_manual(4, 10, 10, bad, pose(3), reason));
+  EXPECT_EQ(a.view(10).manual_revision, revision);
+  a.reset(5);
+  EXPECT_FALSE(a.view(10).aligned);
+  // Clock reset in a new local session removes the old timestamp barrier.
+  EXPECT_TRUE(a.accept_scancontext(5, 1, 1, pose(0), pose(0), reason));
+}
+
+TEST(DualTf, PlanarManualPosePreservesHeightAndTilt) {
+  Eigen::Isometry3d current = pose(3, .4);
+  current.linear() *= Eigen::AngleAxisd(.2, Eigen::Vector3d::UnitY()).toRotationMatrix();
+  current.linear() *= Eigen::AngleAxisd(-.1, Eigen::Vector3d::UnitX()).toRotationMatrix();
+  current.translation().z() = 1.7;
+  const auto desired = dual_tf_planar_base_pose(current, Eigen::Vector2d(8, 9), -.6);
+  EXPECT_NEAR(desired.translation().z(), 1.7, 1e-12);
+  EXPECT_TRUE(desired.linear().row(2).isApprox(current.linear().row(2), 1e-12));
+  EXPECT_NEAR(std::atan2(desired.linear()(1,0), desired.linear()(0,0)), -.6, 1e-12);
+  EXPECT_THROW(dual_tf_planar_base_pose(current, Eigen::Vector2d(0, 0),
+                 std::numeric_limits<double>::infinity()), std::invalid_argument);
+}

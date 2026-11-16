@@ -107,6 +107,7 @@ def _setup(context):
                 'General.lid_topic': '/rslidar_points',
                 'General.imu_topic': '/imu/data_raw',
                 'Localization.map_path': str(map_dir),
+                'Localization.initialpose_base_frame': base_frame,
                 'Localization.visualization.publish_map_cloud': True,
                 'Localization.visualization.map_cloud_path': str(map_cloud),
                 **voxel_extrinsic_parameters(calibration),

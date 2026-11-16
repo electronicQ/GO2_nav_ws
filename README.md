@@ -676,6 +676,22 @@ ros2 param set /controller_server FollowPath.max_speed_xy 0.2
 [sport_model.hpp](src/robot/go2_twist_bridge/include/sport_model.hpp)，
 除非明确了解宇树运动接口，否则不要随意修改。
 
+当前双 TF 定位支持 RViz 顶部的 `2D Pose Estimate`（`/initialpose`）：在 `map`
+坐标系下点击机器狗 `base_link` 的位置并拖动设置朝向，即可覆盖首次或后续的
+全局位置，重新计算 `map -> odom`。它不重置局部 LIO，也不修改 `odom -> imu_link`。
+人工指定的 X/Y/yaw 直接作为全局对齐使用，不需要等待 SC 检索或配准；消息中的
+Z、roll/pitch 和协方差不参与二维修正，高度与倾斜沿用当前估计。
+后续 DIRECT/SC 匹配继续从新位置运行，人工修正前的旧查询结果会被拒绝。
+
+需要先让局部 LIO 初始化，并能查询点击时刻的 `odom -> base_link` TF。
+错误坐标系、非有限位姿、过旧或无法查询对应 TF 的消息会被拒绝并输出原因，
+此时请在局部定位正常后重新点击。点击后日志出现
+`DUAL_TF accepted RViz initial pose` 表示已接受，下一次有效 IMU 预测发布新的 TF。
+默认 `Localization.rviz_initialpose_enabled=true`；设置为 false 可禁用人工入口。
+`Localization.initialpose_base_frame` 默认为 `base_link`，集成 launch 根据标定文件
+的 `base_frame` 自动设置，计算包含 IMU 到车体的外参。
+`2D Pose Estimate` 修改定位，`2D Goal Pose` 下发导航目标，二者独立。
+
 定位导航默认使用
 [localization_nav_light.rviz](src/integration/go2_nav_bringup/config/rviz/localization_nav_light.rviz)：
 10 FPS，显示二维地图、局部代价地图、全局/局部规划路径及 `base_link` 坐标轴。

@@ -60,6 +60,7 @@ struct DualTfView {
   bool stale = false;
   bool confirmation_pending = false;
   std::uint64_t epoch = 0;
+  std::uint64_t manual_revision = 0;
   double last_correction_stamp = -1;
   double age = std::numeric_limits<double>::infinity();
   Eigen::Isometry3d map_from_odom = Eigen::Isometry3d::Identity();
@@ -76,6 +77,17 @@ inline Eigen::Matrix<double, 6, 6> dual_tf_pose_covariance(
   return J * rotation_position_covariance * J.transpose();
 }
 
+inline Eigen::Isometry3d dual_tf_planar_base_pose(
+    const Eigen::Isometry3d &current, const Eigen::Vector2d &xy, double yaw) {
+  if(!current.matrix().allFinite() || !xy.allFinite() || !std::isfinite(yaw))
+    throw std::invalid_argument("nonfinite manual 2D pose");
+  Eigen::Isometry3d desired = current;
+  const double current_yaw = std::atan2(current.linear()(1, 0), current.linear()(0, 0));
+  desired.linear() = Eigen::AngleAxisd(yaw - current_yaw, Eigen::Vector3d::UnitZ()) * current.linear();
+  desired.translation().head<2>() = xy;
+  return desired;
+}
+
 // Owns only the global coordinate relation, never the local estimator state.
 class DualTfAlignment {
  public:
@@ -87,10 +99,13 @@ class DualTfAlignment {
   }
   void reset(std::uint64_t epoch) {
     std::lock_guard<std::mutex> lock(mutex_);
+    const auto next_revision = state_.manual_revision + 1;
     state_ = DualTfView();
+    state_.manual_revision = next_revision;
     state_.epoch = epoch;
     pending_ = false;
     last_result_stamp_ = -1;
+    manual_cutoff_stamp_ = -1;
   }
   DualTfView view(double now) const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -119,6 +134,32 @@ class DualTfAlignment {
                        reason, -1, false);
   }
 
+  // A human map pose overrides the existing alignment, never the local estimator.
+  // In-flight automatic queries at/before now cannot undo this intervention.
+  bool accept_manual(std::uint64_t epoch, double reference_stamp, double now,
+                     const Eigen::Isometry3d &map_from_base,
+                     const Eigen::Isometry3d &odom_from_base, std::string &reason) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    reason.clear();
+    if(epoch != state_.epoch || !std::isfinite(reference_stamp) || !std::isfinite(now) ||
+       reference_stamp <= 0 || reference_stamp > now + 0.05 ||
+       now - reference_stamp > options_.max_result_age_sec ||
+       !valid(map_from_base) || !valid(odom_from_base)) {
+      reason = "manual pose requires a recent finite local pose in the current session";
+      return false;
+    }
+    const Eigen::Isometry3d correction = map_from_base * odom_from_base.inverse();
+    if(!valid(correction)) { reason = "invalid manual map->odom transform"; return false; }
+    state_.map_from_odom = correction;
+    state_.aligned = true;
+    state_.last_correction_stamp = now;
+    ++state_.manual_revision;
+    pending_ = false;
+    manual_cutoff_stamp_ = now;
+    last_result_stamp_ = now;
+    return true;
+  }
+
  private:
   bool accept_impl(std::uint64_t epoch, double query_stamp, double now,
                    const Eigen::Isometry3d &map_from_query,
@@ -132,7 +173,8 @@ class DualTfAlignment {
       return false;
     }
     if (epoch != state_.epoch || !std::isfinite(query_stamp) || !std::isfinite(now) ||
-        query_stamp <= last_result_stamp_ || query_stamp > now + 1e-6 ||
+        query_stamp <= last_result_stamp_ || query_stamp <= manual_cutoff_stamp_ ||
+        query_stamp > now + 1e-6 ||
         now - query_stamp > options_.max_result_age_sec ||
         !valid(map_from_query) || !valid(odom_from_query)) {
       reason = "stale, out-of-order, invalid or previous-session global result";
@@ -196,5 +238,6 @@ class DualTfAlignment {
   bool pending_ = false;
   double pending_stamp_ = -1;
   double last_result_stamp_ = -1;
+  double manual_cutoff_stamp_ = -1;
   Eigen::Isometry3d pending_transform_ = Eigen::Isometry3d::Identity();
 };
