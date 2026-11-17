@@ -47,7 +47,7 @@
       degrade_bound: 100
       point_notime: 0
     LocalBA:
-      enabled: true
+      enabled: false
       win_size: 10
       max_layer: 2
       cov_gyr: 0.01

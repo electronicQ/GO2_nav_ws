@@ -350,7 +350,7 @@ source scripts/setup_env.sh
 
 ros2 launch go2_nav_bringup localization_nav.launch.py \
   sensor_source:=bag \
-  bag_path:=/home/gzq/voxel_slam_ws/bag/ros2bag/zoulang1111 \
+  bag_path:=$GO2_NAV_WORKSPACE/bag/ros2bag/zoulang1111 \
   map_path:=$GO2_NAV_WORKSPACE/maps/zoulang1111_sc_map \
   control_robot:=false
 ```
