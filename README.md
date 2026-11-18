@@ -1,7 +1,12 @@
 # GO2 Voxel-SLAM Navigation Workspace
 
 单一 ROS 2 Humble 工作空间，使用外置 IMU、RoboSense RS16、Voxel-SLAM 和
-Nav2，只通过 `go2_twist_bridge` 控制宇树 GO2。
+Nav2，通过 `go2_twist_bridge` 中的官方 SDK 桥控制宇树 GO2。
+
+当前标准实机路线已在笔记本连接 GO2、外置 IMU 和雷达时测试通过：
+`localization_nav.launch.py`、`sensor_source:=live`、`16zoulang_map`、
+`current_robot.yaml`、`control_robot:=true`、`rviz:=true`。
+工控机部署时 GO2 网卡使用原来的 `enp4s0`，由 `GO2_NETWORK_INTERFACE` 指定，完整命令见下文“实机：机器狗/IMU/雷达全部开启测试定位与导航（控制 GO2）”。
 
 主要链路：
 
@@ -19,7 +24,7 @@ map → odom → imu_link → base_link
               ↓
              /cmd_vel
               ↓
-定位有效门控 → go2_twist_bridge → /api/sport/request
+定位有效门控 → go2_twist_bridge/sdk_twist_bridge.py → 官方 SportClient → GO2
 ```
 
 ## 从远程仓库部署
@@ -45,6 +50,8 @@ source scripts/setup_env.sh
 - 安装编译工具、PCL、Eigen、Boost、yaml-cpp、Python 串口等系统依赖。
 - 运行 `rosdep install` 补齐 ROS 2 运行和开发依赖。
 - 自动安装 `third_party/debs/<架构>/` 下的闭源 `voxel_map_tools` Debian 包。
+- 调用 `install_unitree_sdk.sh` 安装官方 ROS 2 消息包、C++ SDK2 和 Python SDK2，
+  默认放到 `$HOME/unitree_official`，版本固定为当前实测使用的提交。
 - 不在公开源码树中编译闭源执行器；工作空间只编译本地 launch 和参数包。
 - 加载随仓库提供的 GTSAM、TEASER++、Nav2、CycloneDDS 等第三方前缀。
 - 执行完整 `colcon build`，启用 Scan Context、Quatro 和 Nano-GICP 定位。
@@ -69,6 +76,49 @@ ros2 pkg executables voxel_map_tools
 仓库包含约 179 MB 示例地图和约 122 MB 第三方运行前缀，首次 clone 会比普通
 源码仓库慢。`build/`、`install/`、`log/`、Python 缓存、rosbag 和临时地图
 不会进入 Git。
+
+### 工控机安装官方 GO2 SDK
+
+新部署时，`./scripts/install_dependencies.sh` 已包含官方 SDK 安装，无需再单独安装。
+已有工作空间、只补装 SDK 时，在工控机上以普通登录用户执行（系统依赖安装时会调用 sudo）：
+
+```bash
+cd "$HOME/GO2_nav_ws"
+./scripts/install_unitree_sdk.sh
+./scripts/install_unitree_sdk.sh --check
+```
+
+需要互联网访问 Ubuntu/ROS 软件源、GitHub 和 Python 包源。脚本可重复运行，
+复用已有源码、构建目录和虚拟环境，不覆盖官方源码仓库中的本地修改。
+默认使用 2 个编译线程，可用 `--jobs 1` 降低工控机编译负载。
+
+安装内容：
+
+- 固定提交的 `unitree_ros2`、`unitree_sdk2`、`unitree_sdk2_python` 官方源码。
+- `ros2_ws/install`：官方 `unitree_api`、`unitree_go`、`unitree_hg` 消息包。
+- `sdk2_install`：C++ SDK2 和其 DDS 库；不编译或运行动作示例。
+- `venv`：可访问 ROS 系统包的独立 Python 环境，安装 `unitree_sdk2py`、
+  `cyclonedds==0.10.2`、`numpy<2` 和 `opencv-python<4.12`。
+- `installed_revisions.json`：实际安装的官方源码提交记录。
+
+`--check` 只检查文件和 Python/ROS 导入，不初始化运动客户端或发送请求。
+安装流程也不会起立、前进、改变网卡配置或启动控制桥。
+工控机仍使用 `export GO2_NETWORK_INTERFACE=enp4s0`，然后按标准定位导航命令启动。
+
+默认目录与 launch 自动使用的 `$HOME/unitree_official/venv/bin/python` 一致。
+如需更换安装目录：
+
+```bash
+export UNITREE_OFFICIAL_ROOT="$HOME/robot_dependencies/unitree_official"
+./scripts/install_unitree_sdk.sh
+./scripts/install_unitree_sdk.sh --check
+source scripts/setup_env.sh
+```
+
+使用自定义目录时，启动导航的终端也要保留同样的 `UNITREE_OFFICIAL_ROOT`，
+或给 launch 传入 `sdk_python:=/实际目录/venv/bin/python`。
+仅在系统依赖已经齐全时使用 `--skip-apt`。SDK 支持 x86_64/aarch64，
+本工作空间其他预编译依赖的架构限制仍见本章开头。
 
 ## 私有地图处理包
 
@@ -429,14 +479,24 @@ ros2 run tf2_ros tf2_echo map base_link
 
 ### （3）实机：机器狗/IMU/雷达全部开启测试定位与导航（控制 GO2）
 
+这是已在笔记本验证通过、用于部署到机器狗工控机的标准启动入口。
+下方使用工控机原网卡名 `enp4s0`；笔记本复测时只需把该环境变量改为笔记本实际网卡名。
+先停止独立前进测试脚本和单独启动的 SDK 桥，
+由本 launch 统一启动定位、导航、SDK 桥和 RViz。当前默认地图也是 `16zoulang_map`。
+
 ```bash
+cd /home/gzq/GO2_nav_ws
 export GO2_NETWORK_INTERFACE=enp4s0
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+unset ROS_LOCALHOST_ONLY
 source scripts/setup_env.sh
 ros2 launch go2_nav_bringup localization_nav.launch.py \
   sensor_source:=live \
-  map_path:=$GO2_NAV_WORKSPACE/maps/my_scene_sc_map \
+  map_path:=$GO2_NAV_WORKSPACE/maps/16zoulang_map \
   calibration_file:=$GO2_NAV_WORKSPACE/config/calibration/current_robot.yaml \
-  control_robot:=true
+  control_robot:=true \
+  rviz:=true
 ```
 
 实测外参和 `robot_motion_authorized: true` 未完成前，实机控制会被 launch
@@ -658,19 +718,21 @@ Nav2 的所有运行参数集中在
 
 当前参数配置：
 
-- 最大合成线速度 `0.35 m/s`。
+- 最大合成线速度 `0.5 m/s`，控制器、平滑器和 SDK 桥的转向上限均为 `0.3 rad/s`。
 - 全局规划器为 `NavfnPlanner`。
 - 局部控制器为 `DWBLocalPlanner`。
 - 局部代价地图尺寸 `4 m × 4 m`。
 - 障碍输入为 `/rslidar_points` 的 `PointCloud2`。
-- 速度平滑使用 `CLOSED_LOOP`，里程计为 `/LIO/odom_imu`。
+- 速度平滑使用 `OPEN_LOOP`，按上一条输出指令逐步爬升；前进/转向加速度上限分别为
+  `0.8 m/s²` 和 `0.6 rad/s²`。控制器仍使用 `/LIO/odom_imu` 反馈，不关闭里程计。
 
-实机首次测试建议先临时把 `max_speed_xy` 降到约 `0.15～0.20 m/s`。修改 YAML
-后重启导航 launch；运行时临时查看和设置参数可使用：
+独立测试已验证官方 SDK 在 `0.5 m/s` 请求下可以前进，`0.2 m/s` 请求下未正常前进，
+但这不能证明固定的起步阈值。导航的 `0.5 m/s` 是上限，弯道、障碍附近和目标附近仍可能输出较低速度，
+桥不会将小速度强制放大。修改 YAML 后重启导航 launch；运行时查看参数可使用：
 
 ```bash
 ros2 param get /controller_server FollowPath.max_speed_xy
-ros2 param set /controller_server FollowPath.max_speed_xy 0.2
+ros2 param get /velocity_smoother max_velocity
 ```
 
 运行时 `ros2 param set` 不一定永久，正式值应写回源码 YAML。
@@ -688,10 +750,17 @@ ros2 param set /controller_server FollowPath.max_speed_xy 0.2
 | `cmd_vel_timeout_sec` | `0.5` | `/cmd_vel` 超时时间 |
 
 桥接逻辑和停止请求在
-[twist_bridge.cpp](src/robot/go2_twist_bridge/src/twist_bridge.cpp)。
-宇树 API ID 定义在
-[sport_model.hpp](src/robot/go2_twist_bridge/include/sport_model.hpp)，
-除非明确了解宇树运动接口，否则不要随意修改。
+[sdk_twist_bridge.py](src/robot/go2_twist_bridge/scripts/sdk_twist_bridge.py)。
+`control_robot:=true` 自动启动该桥，订阅平滑后的 `/cmd_vel`，通过官方 Python
+`SportClient.Move` 下发前进/转向指令。空闲不发送姿态指令；零速度、速度超时、
+定位门控关闭和正常退出使用 `StopMove(1003)`，不使用 `BalanceStand(1002)`。
+定位门控重新打开后需要新的速度消息才能恢复运动。超时判断使用单调时钟。
+
+当前电脑只需继续 `source scripts/setup_env.sh`，launch 自动使用
+`$HOME/unitree_official/venv/bin/python` 调用 SDK，无需单独启动测试桥或测试脚本。
+可通过 `sdk_python:=/其他路径/venv/bin/python` 指定已安装官方 `unitree_sdk2py`
+且可导入 ROS 2 `rclpy` 的解释器；部署到另一台电脑时也必须安装此依赖。
+旧 C++ 控制桥及手写 API 常量已删除，包中只保留官方 SDK 桥实现。
 
 当前双 TF 定位支持 RViz 顶部的 `2D Pose Estimate`（`/initialpose`）：在 `map`
 坐标系下点击机器狗 `base_link` 的位置并拖动设置朝向，即可覆盖首次或后续的
@@ -743,6 +812,57 @@ ros2 launch go2_nav_bringup localization_nav.launch.py \
 - `Current Scan` 显示 Voxel-SLAM 的 `/map_scan`。
 
 修改 `.rviz` 后需要在 RViz 中重新打开配置，或重启定位导航 launch。
+
+## 独立控制桥前进测试
+
+独立测试与标准导航使用同一份 SDK 桥实现，区别是独立测试默认不要求定位有效。
+下列测试不运行 Nav2、定位、规划或避障，启动前应停止完整导航 launch 和其他速度发布程序。
+让机器狗站稳，在空旷区域测试，并保留遥控停止能力。
+
+### 使用宇树官方 SDK 测试前进与停止
+
+当前电脑的官方源码及独立安装位于 `/home/gzq/unitree_official`：
+`unitree_ros2`、`unitree_sdk2`、`unitree_sdk2_python` 分别为官方仓库；
+`ros2_ws/install` 为官方 ROS 2 消息与示例安装，`sdk2_install` 为 C++ SDK 安装，
+`venv` 为 Python SDK 环境。定位导航 launch 现已默认接入同一 SDK 桥，并额外开启定位门控。
+
+停止定位导航、已启动的 SDK 桥和所有速度发布程序。两个终端分别执行：
+
+```bash
+cd /home/gzq/GO2_nav_ws
+export GO2_NETWORK_INTERFACE=enp4s0
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+unset ROS_LOCALHOST_ONLY
+source scripts/setup_unitree_official.sh
+```
+
+终端一：
+
+```bash
+python scripts/unitree_sdk_cmd_vel_bridge.py
+```
+
+终端二（调用后开始前进测试）：
+
+```bash
+python scripts/test_cmd_vel_forward.py --duration 3
+```
+
+链路为 `/cmd_vel → 本项目测试适配脚本 → 官方 Python SportClient.Move → GO2`。
+适配脚本本身不是宇树官方驱动；其使用未修改的官方 SDK，
+空闲时不发送运动 API 请求，收到零速度、命令超过 0.5 秒未更新、
+退出或异常时在已发送 Move 的情况下调用官方 `StopMove(1003)`，不发送 `BalanceStand`。
+它限制 `|vx|≤0.5 m/s`、`vy=0`、`|wz|≤0.3 rad/s`；
+不自动起立、切换步态或关闭遥控器，不能与完整导航 launch 同时运行。
+
+当前官方 Python SDK 的 `Move()` 使用 no-reply 请求；
+`send_code=0` 表示发送成功，不表示机器人执行了目标速度。
+因此原测试脚本中 `Move requests` 增长而 `response codes={}` 是预期现象，
+应同时看 `robot vx` 和实机动作。`StopMove` 会等待对应请求的响应。
+已在独立 ROS Domain 77、回环网卡和模拟服务上验证原测试脚本与官方 SDK 通信、
+空闲不发请求、零速度停止、超时停止和 Ctrl+C 停止。用户随后在实机验证了
+`0.5 m/s` 前进与停止，并验证了笔记本完整定位导航路线。
 
 ## 定位导航性能监测
 

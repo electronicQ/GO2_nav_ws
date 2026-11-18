@@ -1198,14 +1198,14 @@ public:
           lid_topic, 1000,
           [](sensor_msgs::msg::PointCloud2::ConstSharedPtr message) {
             pcl_handler(message);
-          });
+          }, nullptr, true);
 #endif
     } else {
       sub_pcl = n.subscribe<sensor_msgs::msg::PointCloud2>(
           lid_topic, 1000,
           [](sensor_msgs::msg::PointCloud2::ConstSharedPtr message) {
             pcl_handler(message);
-          });
+          }, nullptr, true);
     }
     if(operation_mode == "localization" && rviz_initialpose_enabled)
       sub_initialpose = n.subscribe<geometry_msgs::msg::PoseWithCovarianceStamped>(

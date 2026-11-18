@@ -1,6 +1,8 @@
 """Run Voxel-SLAM localization and Nav2 with one RViz."""
 
 from pathlib import Path
+import os
+import shlex
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -34,7 +36,7 @@ def _setup(context):
         'voxel_config', 'relocalization_config', 'params_file',
         'lidar_config', 'control_robot', 'bag_start_paused', 'bag_rate',
         'sensor_serial_port', 'sensor_serial_baud', 'rviz', 'rviz_config',
-        'use_sim_time',
+        'use_sim_time', 'sdk_python',
     )
     args = {
         name: LaunchConfiguration(name).perform(context)
@@ -50,6 +52,10 @@ def _setup(context):
     )
     control_robot = parse_auto_bool(
         args['control_robot'], automatic=False, name='control_robot')
+    if control_robot and not Path(args['sdk_python']).is_file():
+        raise RuntimeError(
+            'Official Python SDK interpreter not found: ' + args['sdk_python']
+            + '. Run scripts/install_unitree_sdk.sh or set sdk_python:=/path/to/venv/bin/python.')
     bag_start_paused = parse_auto_bool(
         args['bag_start_paused'], automatic=False, name='bag_start_paused')
     show_rviz = parse_auto_bool(
@@ -154,10 +160,13 @@ def _setup(context):
         }.items(),
     )
 
+    dds_prefix = workspace_root() / 'third_party/ros-humble/opt/ros/humble'
     twist_bridge = Node(
         package='go2_twist_bridge',
-        executable='twist_bridge',
-        name='twist_bridge_node_cpp',
+        executable='sdk_twist_bridge.py',
+        name='unitree_sdk_cmd_vel_bridge',
+        prefix=shlex.quote(args['sdk_python']),
+        additional_env={'CYCLONEDDS_HOME': str(dds_prefix)} if dds_prefix.is_dir() else {},
         output='screen',
         parameters=[{
             'require_localization_valid': True,
@@ -168,6 +177,8 @@ def _setup(context):
             'localization_timeout_sec': 1.0,
             'cmd_vel_timeout_sec': 0.5,
             'stop_on_gate_close': True,
+            'max_linear_x': 0.5,
+            'max_angular_z': 0.3,
         }],
         condition=IfCondition(args['control_robot']),
     )
@@ -211,7 +222,7 @@ def generate_launch_description():
     voxel_share = Path(get_package_share_directory('voxel_slam'))
     nav_share = Path(get_package_share_directory('go2_navigation2'))
     lidar_share = Path(get_package_share_directory('rslidar_sdk'))
-    default_map = ws / 'maps/zoulang1111_sc_map'
+    default_map = ws / 'maps/16zoulang_map'
     default_calibration = (
         ws / 'config/calibration/current_robot.yaml')
 
@@ -238,6 +249,12 @@ def generate_launch_description():
             'lidar_config',
             default_value=str(lidar_share / 'config/config.yaml')),
         DeclareLaunchArgument('control_robot', default_value='false'),
+        DeclareLaunchArgument(
+            'sdk_python',
+            default_value=str(Path(os.environ.get(
+                'UNITREE_OFFICIAL_ROOT', str(Path.home() / 'unitree_official')))
+                / 'venv/bin/python'),
+            description='Python interpreter with the official unitree_sdk2py installed.'),
         DeclareLaunchArgument('bag_start_paused', default_value='false'),
         DeclareLaunchArgument('bag_rate', default_value='1.0'),
         DeclareLaunchArgument(

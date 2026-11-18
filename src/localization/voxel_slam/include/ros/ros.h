@@ -139,11 +139,12 @@ public:
 
   template <typename MessageT, typename CallbackT>
   Subscriber subscribe(const std::string &topic, std::size_t depth,
-                       CallbackT callback, CallbackQueue *queue) {
+                       CallbackT callback, CallbackQueue *queue, bool reliable = false) {
     rclcpp::SubscriptionOptions options;
     if (queue) options.callback_group = queue->group(node_);
     auto subscription = node_->create_subscription<MessageT>(
-        topic, rclcpp::QoS(depth).best_effort(), std::move(callback), options);
+        topic, reliable ? rclcpp::QoS(depth).reliable() : rclcpp::QoS(depth).best_effort(),
+        std::move(callback), options);
     return Subscriber(subscription);
   }
 

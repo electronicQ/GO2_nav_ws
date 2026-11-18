@@ -81,11 +81,28 @@ void pcl_handler(T &msg)
 bool sync_packages(pcl::PointCloud<PointType>::Ptr &pl_ptr, deque<sensor_msgs::msg::Imu::SharedPtr> &imus, IMUEKF &p_imu, bool reset = false)
 {
   static bool pl_ready = false;
+  static auto last_sync = std::chrono::steady_clock::now();
+  static auto last_warning = last_sync;
+  const auto now = std::chrono::steady_clock::now();
   if(reset)
   {
     pl_ready = false;
     last_pcl_time = -1;
+    last_sync = last_warning = now;
     return false;
+  }
+
+  if(now - last_sync > std::chrono::seconds(5) &&
+     now - last_warning > std::chrono::seconds(5))
+  {
+    last_warning = now;
+    lock_guard<mutex> lock(mBuf);
+    ROS_WARN_STREAM("LIO_SYNC waiting: lidar_queue=" << pcl_buf.size()
+                    << " imu_queue=" << imu_buf.size()
+                    << " lidar_pending=" << pl_ready
+                    << " lidar_begin=" << std::fixed << (pl_ready ? p_imu.pcl_beg_time : -1.0)
+                    << " lidar_end=" << (pl_ready ? p_imu.pcl_end_time : -1.0)
+                    << " latest_imu=" << imu_last_time);
   }
 
   if(!pl_ready)
@@ -136,7 +153,10 @@ bool sync_packages(pcl::PointCloud<PointType>::Ptr &pl_ptr, deque<sensor_msgs::m
   pl_ready = false;
 
   if(imus.size() > 4)
+  {
+    last_sync = now;
     return true;
+  }
   else
     return false;
 }

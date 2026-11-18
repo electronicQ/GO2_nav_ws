@@ -70,6 +70,10 @@ echo "Installing proprietary voxel_map_tools binary..."
 "${workspace}/scripts/install_voxel_map_tools_deb.sh"
 
 echo
+echo "Installing official Unitree ROS 2 and SDK dependencies..."
+"${workspace}/scripts/install_unitree_sdk.sh"
+
+echo
 echo "Dependencies installed."
 echo "Next:"
 echo "  source ${workspace}/scripts/setup_env.sh"
